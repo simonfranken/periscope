@@ -80,7 +80,7 @@ levels are a proposal, to be confirmed when they are implemented.
 | ConfigMap | namespace | `configmaps` | none | `3 keys` |
 | Secret | namespace | `secrets` | none | type, `3 keys` (values hidden, F64) |
 | Node | cluster | `nodes` (top level) | `not ready` (Danger); `pressure` (Warn): memory, disk or PID pressure; `cordoned` (Info): unschedulable | roles, version |
-| custom resource | namespace (or `nodes`' level if cluster-scoped) | its plural, e.g. `certificates` | `not ready` (Warn): `Ready` condition is `False`, with its reason | none |
+| custom resource | namespace (or the top level if cluster-scoped) | `custom resources`, then its plural, e.g. `certificates`, alphabetically; only kinds with objects | `not ready` (Warn): `Ready` condition is `False`, with its reason | none |
 
 - A Service with no endpoints because its workload is scaled to zero is
   quiet, like the workload.

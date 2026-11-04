@@ -59,8 +59,8 @@ See [P14](decisions.md#p14-resources-beyond-workloads) and the
 
 - **F60** Below the workloads, a namespace lists its other resources,
   grouped by kind like the workloads (F2), in this order: `services`,
-  `ingresses`, `persistentvolumeclaims`, then `configmaps`, `secrets`.
-  Groups without objects are not shown.
+  `ingresses`, `persistentvolumeclaims`, `custom resources` (F67), then
+  `configmaps`, `secrets`. Groups without objects are not shown.
 - **F61** Configuration (`configmaps`, `secrets`) comes last: a namespace
   can hold hundreds of them (Helm keeps one Secret per release revision),
   and they are for browsing, not for finding problems.
@@ -83,11 +83,15 @@ See [P14](decisions.md#p14-resources-beyond-workloads) and the
   to the namespaces, with issues per node (not ready, memory, disk or PID
   pressure, cordoned). PersistentVolumes are reached from their PVC.
 - **F67** Custom resources (CRDs, e.g. OpenShift Routes, cert-manager
-  Certificates, Argo CD Applications) are read generically: their state
-  comes from the `Ready` condition, which most operators set. Only a chosen
-  set of kinds is shown, not every CRD of the cluster; how the set is
-  chosen (config file, kinds with objects in the namespace, picker) is
-  open.
+  Certificates, Argo CD Applications) are listed under a `custom resources`
+  header of their namespace, with one header per kind below it (its plural,
+  e.g. `certificates`), ordered alphabetically. A kind is shown in a
+  namespace only if it has objects there, so CRDs that are installed but
+  unused cost no rows. If two kinds share a plural, their API group is
+  added, muted (`applications argoproj.io`). Cluster-scoped custom
+  resources get the same section at the top level, after `nodes`. Their
+  state comes from the `Ready` condition, which most operators set. There
+  is no configuration: which kinds appear follows from the cluster alone.
 
 ### State per object
 

@@ -175,7 +175,11 @@ whose backend is gone, a PVC that never binds, a node that is not ready.
 **Decision.** periscope shows more kinds, as further groups of a namespace
 after the workloads: Services, Ingresses, PVCs, then ConfigMaps and
 Secrets; nodes as a group at the top level; custom resources generically
-through their `Ready` condition, for a chosen set of kinds. The tree stays
+through their `Ready` condition, under a `custom resources` header with one
+header per kind, alphabetically, only for kinds that have objects in the
+namespace. periscope has no configuration file: what is shown follows from
+the cluster, so it works the same on every machine and nothing needs
+setting up. The tree stays
 an ownership tree; relations (Service → pods, Ingress → Service, PVC →
 pods) are shown in the detail pane. Kinds with a notion of broken get
 issues; kinds without one show a muted fact (`3 keys`), never `healthy`
@@ -184,4 +188,6 @@ revealed on purpose. A forbidden list marks only its group as `error`.
 **Consequences.** Namespaces get longer; configuration goes last and is
 collapsed with the namespace, and empty groups are hidden. The provider
 needs a list per kind and bounded concurrency across many more requests
-(N2). Which custom resource kinds are shown is still open.
+(N2). Custom resources need discovery of the installed CRDs and one list
+per kind across all namespaces (not one per namespace), filtered into the
+namespaces; kinds with no objects add no rows.
