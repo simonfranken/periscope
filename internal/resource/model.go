@@ -8,7 +8,9 @@ import (
 	"time"
 )
 
-// Kind is the kind of an object in the tree.
+// Kind is the kind of an object in the tree. The constants are in display
+// order (Arrange sorts by them): new kinds go where F60 lists them, e.g.
+// Services before KindCustom, ConfigMaps and Secrets after it.
 type Kind int
 
 const (
