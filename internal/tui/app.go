@@ -133,7 +133,7 @@ func (m Model) busy() bool {
 		return true
 	}
 	loading := m.cluster.Root != nil && m.cluster.Root.Status == nil && m.cluster.Root.Err == nil
-	resource.Walk(m.cluster.Namespaces, func(o *resource.Object) {
+	resource.Walk(m.cluster.Objects, func(o *resource.Object) {
 		loading = loading || (o.Status == nil && o.Err == nil)
 	})
 	return loading
@@ -230,12 +230,12 @@ func (m Model) treeLoaded(msg treeLoadedMsg) (tea.Model, tea.Cmd) {
 	if m.cluster.Root != nil {
 		track(m.cluster.Root)
 	}
-	resource.Walk(m.cluster.Namespaces, track)
+	resource.Walk(m.cluster.Objects, track)
 	m.tree.SetRoot(m.cluster.Root)
 	if initial {
-		m.tree.SetRoots(m.cluster.Namespaces)
+		m.tree.SetRoots(m.cluster.Objects)
 	} else {
-		m.tree.ReplaceRoots(m.cluster.Namespaces)
+		m.tree.ReplaceRoots(m.cluster.Objects)
 	}
 	cmds = append(cmds, m.tick())
 	return m, tea.Batch(cmds...)

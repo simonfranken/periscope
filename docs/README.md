@@ -38,7 +38,8 @@ Installs `periscope` and the alias `peri` (linux/macOS, amd64/arm64) to
 ## Status
 
 **Skeleton.** The UI runs on built-in mock data (`periscope --mock`):
-the tree, the detail pane, the header, problems only (`!`), the filter (`/`),
+the tree (including custom resources, F67), the detail pane, the header,
+problems only (`!`), the filter (`/`),
 copy name (`c`), the full help and legend (`?`), and the update check.
 Without `--mock` periscope exits with a hint, because there is no cluster
 provider yet.
@@ -53,8 +54,8 @@ Next steps, roughly in order:
    that starts crashing shows up without `r`.
 3. **More resource kinds** (F60–F67, P14), in this order: Services,
    Ingresses and PVCs (they have real states); ConfigMaps and Secrets (for
-   browsing, values hidden); nodes; custom resources through their `Ready`
-   condition.
+   browsing, values hidden); nodes; discovering the custom resources (the
+   UI for them is done).
 4. **Context and namespace pickers** (`C`, `n`): popups like submarine's
    branch picker, with a dimmed backdrop.
 5. **Read actions**: logs (`v`, the previous container's logs for a

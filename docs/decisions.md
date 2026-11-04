@@ -191,3 +191,11 @@ needs a list per kind and bounded concurrency across many more requests
 (N2). Custom resources need discovery of the installed CRDs and one list
 per kind across all namespaces (not one per namespace), filtered into the
 namespaces; kinds with no objects add no rows.
+**Custom resources, as implemented.** Headers nest (`Group` holds
+`custom resources/certificates`). Whether two kinds share a plural is
+decided over the whole cluster, so a kind's header doesn't change between
+namespaces. Without a Ready condition the muted word is `unchecked`: we
+can't tell, so we don't say `healthy`. Conditions are read only for custom
+resources, so a pod's Ready condition never adds a second `not ready`.
+`Cluster.Namespaces` became `Cluster.Objects`, since the top level now
+holds cluster-scoped objects too.

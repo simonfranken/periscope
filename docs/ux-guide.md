@@ -78,7 +78,8 @@ page at once (before it would close the filter):
    `Everything`, `App`. The `App` column says `? what words mean` and
    `esc close`.
 2. **Legend**: the words and symbols in their colors: `Problems` (the
-   danger words), `Status` (the other issue words, `healthy`, `completed`),
+   danger words), `Status` (the other issue words, `healthy`, `completed`,
+   `unchecked`),
    `Symbols` (`n/m`, `+n`, `·k`, `[n]`, the age). Then `App` with
    `esc close`. The words come from `Theme.Legend()`, the levels from
    `IssueKind.Level()`, so they are the tree's.
@@ -102,7 +103,7 @@ indent ▸ name [n]   status          ready  age
 | indent | 2 per depth | |
 | toggle | 3 | `▸` collapsed, `▾` expanded, blank for leaves |
 | name | fits the widest visible name | name, `[n]` = direct children (collapsed only) |
-| status | the widest visible status, at least 16 | issue word, `+n`, `·k` hidden issues per level (red, yellow, blue); muted `healthy` / `completed` without issues; spinner while loading; `error` |
+| status | the widest visible status, at least 16 | issue word, `+n`, `·k` hidden issues per level (red, yellow, blue); muted `healthy` / `completed` / `unchecked` without issues; spinner while loading; `error` |
 | ready | 5, right-aligned | `ready/desired` replicas of a workload, `ready/total` containers of a pod |
 | age | 4, right-aligned, muted | like kubectl: `40s`, `25m`, `3h`, `12d` |
 
@@ -119,17 +120,21 @@ indent ▸ name [n]   status          ready  age
 
 ### Detail pane
 
-1. Namespace and kind (muted, `shop · pod`), then the name (bold) with the
-   age right-aligned (`age 25m`).
+1. Namespace and kind (muted, `shop · pod`, `shop ·
+   certificate.cert-manager.io`), then the name (bold) with the age
+   right-aligned (`age 25m`).
 2. One line per issue: word (colored, 12 columns) + explanation, naming the
    container (`container keeps crashing (app)`). `healthy  nothing to do`
-   if there are none here and none below.
+   if there are none here and none below (`unchecked  no Ready condition
+   to read` for a custom resource without one).
 3. Facts: `Ready 2/3 · 1 updated` (workloads), `Phase`, `Node` (pods),
-   `Workloads` / `Pods` (count and the issues below).
+   `Objects` (namespaces) / `Pods` (workloads): count and the issues below.
    - `Issues below` (namespaces and the cluster only): one line per issue
      kind, the word in its color (12 columns) and the number of objects
      with it, most severe first; left out if there are none.
-4. `Containers`: name, state (in the color of the issue about it, muted
+4. `Conditions` (custom resources): type, status (in the color of the
+   issue about it, muted otherwise), reason; the message below, muted.
+   `Containers` (pods): name, state (in the color of the issue about it, muted
    otherwise), restarts with the last reason and its age; the image below,
    muted.
 5. `Warnings`: up to five events, newest first: age (muted), reason
@@ -189,13 +194,14 @@ colors in components.
 | `pull error` | image can't be pulled (`c`) |
 | `failed` | ran and failed |
 | `pending` | not scheduled or not started yet |
-| `not ready` | running, but not ready (`c`) |
+| `not ready` | running, but not ready (`c`); Ready condition is False (`reason`) for a custom resource |
 | `degraded` | only `r` of `n` replicas ready |
 | `restarting` | restarted in the last hour (`c`) |
 | `rolling out` | `u` of `n` replicas updated |
 | `suspended` | schedule suspended, no new runs |
 | `terminating` | namespace is being deleted |
 | `healthy` | nothing to do |
+| `unchecked` | no Ready condition to read (custom resources) |
 
 ## Navigation
 

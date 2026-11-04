@@ -16,6 +16,10 @@ const Healthy = "healthy"
 // Completed is the word for a pod that ran to completion.
 const Completed = "completed"
 
+// Unchecked is the word for a custom resource without a Ready condition:
+// periscope can't tell whether it works, so it doesn't say healthy.
+const Unchecked = "unchecked"
+
 // IssueWord is the short label for an issue kind shown in the tree.
 func IssueWord(k resource.IssueKind) string {
 	switch k {
@@ -66,6 +70,9 @@ func IssueText(is resource.Issue, s *resource.Status) string {
 	case resource.IssuePending:
 		return "not scheduled or not started yet"
 	case resource.IssueNotReady:
+		if r := s.ReadyCondition(); is.Container == "" && r != nil {
+			return "Ready condition is False" + reason(r.Reason)
+		}
 		return "running, but not ready" + in
 	case resource.IssueDegraded:
 		return fmt.Sprintf("only %d of %d replicas ready", s.Ready, s.Desired)
@@ -80,12 +87,31 @@ func IssueText(is resource.Issue, s *resource.Status) string {
 	}
 }
 
+func reason(r string) string {
+	if r == "" {
+		return ""
+	}
+	return " (" + r + ")"
+}
+
 // QuietWord is the muted word for an object without issues.
-func QuietWord(s *resource.Status) string {
-	if s != nil && s.Phase == resource.PhaseSucceeded {
+func QuietWord(o *resource.Object) string {
+	s := o.Status
+	switch {
+	case o.Kind == resource.KindCustom && s.ReadyCondition() == nil:
+		return Unchecked
+	case s != nil && s.Phase == resource.PhaseSucceeded:
 		return Completed
 	}
 	return Healthy
+}
+
+// QuietText explains the quiet word in the detail pane.
+func QuietText(o *resource.Object) string {
+	if QuietWord(o) == Unchecked {
+		return "no Ready condition to read"
+	}
+	return "nothing to do"
 }
 
 // StatusWord renders the state of o as one word: a spinner while loading,
@@ -107,7 +133,7 @@ func (t Theme) StatusWord(o *resource.Object, base lipgloss.Style, spinner strin
 		}
 		return out
 	}
-	return seg(t.Muted, QuietWord(o.Status))
+	return seg(t.Muted, QuietWord(o))
 }
 
 // LevelStyle returns base with the text color (and weight) for a level.

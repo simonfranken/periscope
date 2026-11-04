@@ -26,7 +26,7 @@ const (
 	IssuePullError                    // an image can't be pulled
 	IssueFailed                       // a pod or job failed
 	IssuePending                      // a pod is not scheduled or not started
-	IssueNotReady                     // a running pod with a container not ready
+	IssueNotReady                     // a running pod with a container not ready, or a custom resource whose Ready is False
 	IssueDegraded                     // a workload with fewer ready replicas than desired
 	IssueRestarting                   // a container restarted recently
 	IssueRollingOut                   // a workload is updating its replicas
@@ -127,6 +127,10 @@ func (s *Status) Issues() []Issue {
 				break
 			}
 		}
+	}
+
+	if r := s.ReadyCondition(); r != nil && r.Status == "False" {
+		add(IssueNotReady, "")
 	}
 
 	slices.SortStableFunc(out, func(a, b Issue) int { return int(a.Kind) - int(b.Kind) })

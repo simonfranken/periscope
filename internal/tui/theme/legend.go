@@ -28,7 +28,7 @@ func issueMeaning(k resource.IssueKind) string {
 	case resource.IssuePending:
 		return "not started yet"
 	case resource.IssueNotReady:
-		return "running, not ready"
+		return "pod or resource not ready"
 	case resource.IssueDegraded:
 		return "some replicas ready"
 	case resource.IssueRestarting:
@@ -61,6 +61,7 @@ func (t Theme) Legend() []LegendGroup {
 	other.Rows = append(other.Rows,
 		LegendRow{muted.Render(Healthy), "nothing to do"},
 		LegendRow{muted.Render(Completed), "pod ran to completion"},
+		LegendRow{muted.Render(Unchecked), "no Ready condition to read"},
 	)
 	symbols := LegendGroup{Title: "Symbols", Rows: []LegendRow{
 		{muted.Render("n/m"), "ready / desired"},

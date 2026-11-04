@@ -55,7 +55,9 @@ type Provider interface {
 ```
 
 - `Tree` returns the cluster and all objects with `Parent` and `Children`
-  linked and `Group` set. `Status` fields are nil.
+  linked and `Group` set, in the order of `resource.Arrange` (which also
+  sets the custom resources' headers). `Cluster.Objects` is the top level:
+  namespaces, then cluster-scoped objects. `Status` fields are nil.
 - `Status` is called once per object, concurrently. It must be safe to call
   concurrently and must respect `ctx`.
 - `Object.Path` is the unique ID (see

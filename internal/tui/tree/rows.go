@@ -1,6 +1,10 @@
 package tree
 
-import "periscope/internal/resource"
+import (
+	"strings"
+
+	"periscope/internal/resource"
+)
 
 type rowKind int
 
@@ -24,13 +28,23 @@ func (m *Model) rows() []row {
 }
 
 // appendRows groups mods by their Group (e.g. "deployments"). Each group
-// gets a header row; its objects are indented one level deeper.
+// gets a header row; its objects are indented one level deeper. A Group with
+// "/" nests headers ("custom resources/certificates").
 func (m *Model) appendRows(out *[]row, mods []*resource.Object, depth int) {
-	for _, g := range groupByDir(m.filtered(mods)) {
+	m.appendGroups(out, m.filtered(mods), depth, "")
+}
+
+// appendGroups lists mods below the headers in prefix.
+func (m *Model) appendGroups(out *[]row, mods []*resource.Object, depth int, prefix string) {
+	for _, g := range groupByDir(mods, prefix) {
 		d := depth
 		if g.dir != "" {
 			*out = append(*out, row{kind: rowDir, depth: depth, label: g.dir})
 			d++
+		}
+		if g.nested {
+			m.appendGroups(out, g.mods, d, prefix+g.dir+"/")
+			continue
 		}
 		for _, s := range g.mods {
 			*out = append(*out, row{kind: rowNode, depth: d, node: s})
@@ -42,23 +56,40 @@ func (m *Model) appendRows(out *[]row, mods []*resource.Object, depth int) {
 }
 
 type dirGroup struct {
-	dir  string
-	mods []*resource.Object
+	dir    string
+	nested bool // the objects have further headers below dir
+	mods   []*resource.Object
 }
 
-// groupByDir keeps the order in which groups first appear.
-func groupByDir(mods []*resource.Object) []dirGroup {
+// groupByDir groups mods by the first header of their Group below prefix,
+// in the order in which groups first appear.
+func groupByDir(mods []*resource.Object, prefix string) []dirGroup {
 	var groups []dirGroup
 	idx := map[string]int{}
 	for _, s := range mods {
-		dir := s.Group
+		dir, rest, nested := strings.Cut(strings.TrimPrefix(s.Group, prefix), "/")
 		i, ok := idx[dir]
 		if !ok {
 			i = len(groups)
 			idx[dir] = i
 			groups = append(groups, dirGroup{dir: dir})
 		}
+		groups[i].nested = groups[i].nested || (nested && rest != "")
 		groups[i].mods = append(groups[i].mods, s)
 	}
 	return groups
+}
+
+// displayOrder is mods in the order the tree lists them below their
+// headers.
+func displayOrder(mods []*resource.Object, prefix string) []*resource.Object {
+	var out []*resource.Object
+	for _, g := range groupByDir(mods, prefix) {
+		if g.nested {
+			out = append(out, displayOrder(g.mods, prefix+g.dir+"/")...)
+		} else {
+			out = append(out, g.mods...)
+		}
+	}
+	return out
 }

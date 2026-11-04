@@ -16,7 +16,7 @@ func TestMockShowsEveryIssue(t *testing.T) {
 	}
 	seen := map[resource.IssueKind]bool{}
 	paths := map[string]bool{}
-	resource.Walk(c.Namespaces, func(o *resource.Object) {
+	resource.Walk(c.Objects, func(o *resource.Object) {
 		if paths[o.Path] {
 			t.Errorf("duplicate path %q", o.Path)
 		}

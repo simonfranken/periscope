@@ -2,6 +2,7 @@ package tree
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -551,4 +552,72 @@ func TestStatusColumnFitsWidestStatus(t *testing.T) {
 	if !strings.Contains(ansi.Strip(m.View()), want) {
 		t.Fatalf("view cuts the status %q:\n%s", want, ansi.Strip(m.View()))
 	}
+}
+
+// customTree is a namespace with a workload and custom resources of two
+// kinds, below nested headers.
+func customTree(t *testing.T) *Model {
+	t.Helper()
+	cert := &resource.Type{Kind: "Certificate", Plural: "certificates", Group: "cert-manager.io"}
+	route := &resource.Type{Kind: "Route", Plural: "routes", Group: "route.openshift.io"}
+	ns := &resource.Object{Kind: resource.KindNamespace, Name: "shop", Path: "shop"}
+	for _, o := range []*resource.Object{
+		{Kind: resource.KindDeployment, Name: "api", Group: "deployments"},
+		{Kind: resource.KindCustom, Type: route, Name: "web"},
+		{Kind: resource.KindCustom, Type: cert, Name: "api-tls"},
+	} {
+		o.Parent, o.Namespace, o.Path = ns, "shop", "shop/"+o.Ref()
+		o.Status = &resource.Status{}
+		ns.Children = append(ns.Children, o)
+	}
+	ns.Status = &resource.Status{}
+	resource.Arrange([]*resource.Object{ns})
+	m := New(theme.Default())
+	m.SetRoots([]*resource.Object{ns})
+	m.SetSize(80, 20)
+	m.Right() // expand shop, select api
+	return &m
+}
+
+func TestCustomResourcesUnderNestedHeaders(t *testing.T) {
+	m := customTree(t)
+	var got []string
+	for _, r := range m.rows() {
+		label := r.label
+		if r.kind == rowNode {
+			label = r.node.Name
+		}
+		got = append(got, fmt.Sprintf("%d:%s", r.depth, label))
+	}
+	want := "0:shop 1:deployments 2:api 1:custom resources 2:certificates 3:api-tls 2:routes 3:web"
+	if strings.Join(got, " ") != want {
+		t.Fatalf("rows = %v, want %v", got, want)
+	}
+}
+
+func TestDownSkipsNestedHeaders(t *testing.T) {
+	m := customTree(t)
+	assertCursor(t, m, "shop/deployment/api")
+	m.Down()
+	assertCursor(t, m, "shop/certificate.cert-manager.io/api-tls")
+	m.Down()
+	assertCursor(t, m, "shop/route.route.openshift.io/web")
+	m.Up()
+	m.Up()
+	assertCursor(t, m, "shop/deployment/api")
+}
+
+func TestFilterReachesCustomResources(t *testing.T) {
+	m := customTree(t)
+	m.SetFilter("cert-manager")
+	assertRows(t, m, "shop", "custom resources", "certificates", "shop/certificate.cert-manager.io/api-tls")
+	assertCursor(t, m, "shop/certificate.cert-manager.io/api-tls")
+}
+
+func TestProblemsOnlyShowsNotReadyCustomResource(t *testing.T) {
+	m := customTree(t)
+	web := m.roots[0].Children[2]
+	web.Status = &resource.Status{Conditions: []resource.Condition{{Type: "Ready", Status: "False"}}}
+	m.SetProblemsOnly(true)
+	assertRows(t, m, "shop", "custom resources", "routes", "shop/route.route.openshift.io/web")
 }

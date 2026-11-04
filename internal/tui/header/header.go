@@ -39,7 +39,7 @@ func View(t theme.Theme, c *resource.Cluster, spinner string, width int, selecte
 	// one count per level, like the tree's hidden counts; the counts per
 	// issue kind are in the cluster's detail pane
 	var namespaces, pods, loading int
-	resource.Walk(c.Namespaces, func(o *resource.Object) {
+	resource.Walk(c.Objects, func(o *resource.Object) {
 		switch o.Kind {
 		case resource.KindNamespace:
 			namespaces++
@@ -53,7 +53,7 @@ func View(t theme.Theme, c *resource.Cluster, spinner string, width int, selecte
 
 	sep := seg(t.Muted, " · ")
 	var parts []string
-	if counts := t.LevelCounts((&resource.Object{Children: c.Namespaces}).HiddenIssues(), " · ", bar); counts != "" {
+	if counts := t.LevelCounts((&resource.Object{Children: c.Objects}).HiddenIssues(), " · ", bar); counts != "" {
 		parts = append(parts, counts)
 	}
 	if loading > 0 {

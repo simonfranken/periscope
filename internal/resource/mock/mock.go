@@ -58,11 +58,11 @@ type builder struct {
 	now      time.Time
 }
 
-func (b builder) namespace(name string, st *resource.Status, workloads ...*resource.Object) *resource.Object {
+func (b builder) namespace(name string, st *resource.Status, objects ...*resource.Object) *resource.Object {
 	ns := &resource.Object{Kind: resource.KindNamespace, Name: name, Path: name}
 	b.statuses[ns.Path] = st
-	for _, w := range workloads {
-		b.adopt(ns, w)
+	for _, o := range objects {
+		b.adopt(ns, o)
 	}
 	return ns
 }
@@ -73,12 +73,14 @@ func (b builder) adopt(parent, o *resource.Object) {
 	o.Namespace = parent.Namespace
 	if parent.Kind == resource.KindNamespace {
 		o.Namespace = parent.Name
-		o.Group = o.Kind.Plural()
+		if o.Kind != resource.KindCustom { // resource.Arrange sets the custom resources' groups
+			o.Group = o.Kind.Plural()
+		}
 	}
-	o.Path = parent.Path + "/" + o.Kind.Name() + "/" + o.Name
+	o.Path = parent.Path + "/" + o.Ref()
 	parent.Children = append(parent.Children, o)
-	if st, ok := b.statuses[o.Name]; ok { // registered by name before the path was known
-		delete(b.statuses, o.Name)
+	if st, ok := b.statuses[o.Ref()]; ok { // registered by ref before the path was known
+		delete(b.statuses, o.Ref())
 		b.statuses[o.Path] = st
 	}
 	children := o.Children
@@ -91,7 +93,7 @@ func (b builder) adopt(parent, o *resource.Object) {
 func (b builder) workload(k resource.Kind, name string, st *resource.Status, pods ...*resource.Object) *resource.Object {
 	st.Created = b.now.Add(-30 * 24 * time.Hour)
 	w := &resource.Object{Kind: k, Name: name, Children: pods}
-	b.statuses[name] = st
+	b.statuses[w.Ref()] = st
 	return w
 }
 
@@ -99,8 +101,38 @@ func (b builder) pod(name string, st *resource.Status) *resource.Object {
 	if st.Created.IsZero() {
 		st.Created = b.now.Add(-3 * 24 * time.Hour)
 	}
-	b.statuses[name] = st
-	return &resource.Object{Kind: resource.KindPod, Name: name}
+	o := &resource.Object{Kind: resource.KindPod, Name: name}
+	b.statuses[o.Ref()] = st
+	return o
+}
+
+// custom is a custom resource of type t with the given conditions.
+func (b builder) custom(t *resource.Type, name string, conds ...resource.Condition) *resource.Object {
+	o := &resource.Object{Kind: resource.KindCustom, Type: t, Name: name}
+	b.statuses[o.Ref()] = &resource.Status{Created: b.now.Add(-30 * 24 * time.Hour), Conditions: conds}
+	return o
+}
+
+// clusterScoped puts a custom resource at the top level, where its path
+// is its ref, the key custom registered its status under.
+func (b builder) clusterScoped(o *resource.Object) *resource.Object {
+	o.Path = o.Ref()
+	return o
+}
+
+// Types of the custom resources; two of them share the plural
+// "applications", so their headers name the API group.
+var (
+	certificate    = &resource.Type{Kind: "Certificate", Plural: "certificates", Group: "cert-manager.io"}
+	clusterIssuer  = &resource.Type{Kind: "ClusterIssuer", Plural: "clusterissuers", Group: "cert-manager.io"}
+	route          = &resource.Type{Kind: "Route", Plural: "routes", Group: "route.openshift.io"}
+	serviceMonitor = &resource.Type{Kind: "ServiceMonitor", Plural: "servicemonitors", Group: "monitoring.coreos.com"}
+	argoApp        = &resource.Type{Kind: "Application", Plural: "applications", Group: "argoproj.io"}
+	sigApp         = &resource.Type{Kind: "Application", Plural: "applications", Group: "app.k8s.io"}
+)
+
+func ready(reason, message string) resource.Condition {
+	return resource.Condition{Type: "Ready", Status: "True", Reason: reason, Message: message}
 }
 
 func running(node, image string) *resource.Status {
@@ -153,7 +185,12 @@ func fixture(statuses map[string]*resource.Status, now time.Time) *resource.Clus
 		proxies = append(proxies, b.pod(fmt.Sprintf("kube-proxy-%c2%cmq", 'p'+i, 'f'+i), running(n, "registry.k8s.io/kube-proxy:v1.34.1")))
 	}
 
-	namespaces := []*resource.Object{
+	objects := []*resource.Object{
+		b.namespace("argocd", ns(),
+			b.workload(resource.KindDeployment, "argocd-server", &resource.Status{Desired: 1, Ready: 1, Updated: 1},
+				b.pod("argocd-server-7d9c6b5f4-wq8rt", running("node-1", "quay.io/argoproj/argocd:v3.1.0"))),
+			b.custom(argoApp, "shop"), // Argo CD reports health in status.health, not as a condition
+		),
 		b.namespace("default", ns(),
 			b.workload(resource.KindDeployment, "hello", &resource.Status{Desired: 1, Ready: 1, Updated: 1},
 				b.pod("hello-6d8f9b7c4-x2k9p", running("node-1", "nginx:1.29"))),
@@ -170,6 +207,8 @@ func fixture(statuses map[string]*resource.Status, now time.Time) *resource.Clus
 			b.workload(resource.KindStatefulSet, "prometheus", &resource.Status{Desired: 1, Ready: 1, Updated: 1},
 				b.pod("prometheus-0", running("node-3", "prom/prometheus:v3.5.0"))),
 			b.workload(resource.KindDaemonSet, "node-exporter", &resource.Status{Desired: 3, Ready: 3, Updated: 3}, exporters...),
+			b.custom(serviceMonitor, "grafana"),
+			b.custom(serviceMonitor, "node-exporter"),
 		),
 		b.namespace("payments", ns(),
 			b.workload(resource.KindDeployment, "checkout", &resource.Status{Desired: 2, Ready: 0, Updated: 2},
@@ -197,17 +236,24 @@ func fixture(statuses map[string]*resource.Status, now time.Time) *resource.Clus
 			b.workload(resource.KindJob, "migrate-42", &resource.Status{Phase: resource.PhaseFailed},
 				b.pod("migrate-42-x8f2k", failed)),
 			b.workload(resource.KindCronJob, "nightly-report", &resource.Status{Suspended: true}),
+			b.custom(certificate, "web-tls", resource.Condition{Type: "Ready", Status: "False", Reason: "Failed",
+				Message: "The certificate request has failed to complete and will be retried: ACME challenge failed"}),
+			b.custom(certificate, "api-tls", ready("Ready", "Certificate is up to date and has not expired")),
+			b.custom(route, "web"),
+			b.custom(sigApp, "storefront", ready("ComponentsReady", "all components ready")),
 		),
 		b.namespace("legacy-feature", &resource.Status{Created: ago(400 * 24 * time.Hour), Terminating: true}),
+		b.clusterScoped(b.custom(clusterIssuer, "letsencrypt", ready("ACMEAccountRegistered", "The ACME account was registered with the ACME server"))),
 	}
+	resource.Arrange(objects)
 
 	root := &resource.Object{Kind: resource.KindCluster, Name: "kind-dev"}
 	statuses[""] = &resource.Status{Created: ago(120 * 24 * time.Hour)}
 	return &resource.Cluster{
-		Context:    "kind-dev",
-		Server:     "https://127.0.0.1:6443",
-		Version:    "v1.34.1",
-		Root:       root,
-		Namespaces: namespaces,
+		Context: "kind-dev",
+		Server:  "https://127.0.0.1:6443",
+		Version: "v1.34.1",
+		Root:    root,
+		Objects: objects,
 	}
 }

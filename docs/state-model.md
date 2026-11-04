@@ -12,6 +12,13 @@ words and colors in `internal/tui/theme`.
 | namespace | cluster | `shop` | none |
 | Deployment, StatefulSet, DaemonSet, Job, CronJob | namespace | `shop/deployment/api` | `deployments`, … |
 | pod | its workload | `shop/deployment/api/pod/api-7b8d9f6c5-zp6qx` | none |
+| custom resource | namespace | `shop/certificate.cert-manager.io/api-tls` | `custom resources`, then its plural: `certificates` |
+| custom resource, cluster-scoped | cluster (top level) | `clusterissuer.cert-manager.io/letsencrypt` | as above |
+
+A path is the parent's path, `/`, and the object's kubectl ref (`Ref`:
+`deployment/api`, `certificate.cert-manager.io/api-tls`). `resource.Arrange`
+puts every provider's tree into display order and sets the custom
+resources' headers (F67).
 
 A Deployment's pods belong to it through its ReplicaSets, which are not
 shown: they are an implementation detail of a rollout. A Job created by a
@@ -29,6 +36,7 @@ CronJob is listed under the CronJob *(planned, with the provider)*.
 | `Desired`, `Ready`, `Updated` | workloads | replicas (DaemonSet: `desiredNumberScheduled`, `numberReady`, `updatedNumberScheduled`) |
 | `Suspended` | CronJob, Job | `spec.suspend` |
 | `Phase`, `Node` | pods | `status.phase`, `spec.nodeName` |
+| `Conditions` | custom resources only | `status.conditions`: type, status, reason, message. Not read for pods and workloads, whose state is in the fields above |
 | `Containers` | pods | `status.containerStatuses`: ready, state, reason, restarts, last termination reason and time |
 | `Events` | all | warning events whose `involvedObject` is the object, newest first |
 
@@ -45,7 +53,7 @@ kind appears at most once; an issue about a container names it.
 | `pull error` | Danger | a container waits in `ImagePullBackOff` or `ErrImagePull` |
 | `failed` | Danger | a pod (or Job) is in phase `Failed` |
 | `pending` | Warn | a pod is in phase `Pending` |
-| `not ready` | Warn | a running pod has a running container that isn't ready |
+| `not ready` | Warn | a running pod has a running container that isn't ready; a custom resource's `Ready` condition is `False` |
 | `degraded` | Warn | a workload has some, but not all replicas ready |
 | `restarting` | Warn | a container restarted within the last hour (and it wasn't an OOM kill) |
 | `rolling out` | Info | a workload has fewer updated replicas than desired |
@@ -54,7 +62,8 @@ kind appears at most once; an issue about a container names it.
 
 - *Levels.* Danger: something is broken now. Warn: something isn't
   working as intended, or might break. Info: something is in progress or
-  switched off on purpose. Quiet: `healthy` (`completed` for a pod in phase
+  switched off on purpose. Quiet: `healthy` (`unchecked` for a custom
+  resource without a Ready condition, `completed` for a pod in phase
   `Succeeded`). See submarine D4 and D26 for the three levels plus info.
 - *Restarts are recent or quiet.* A pod that restarted twice three weeks ago
   is fine; a restart count alone would make long-running pods look broken.
@@ -68,9 +77,11 @@ kind appears at most once; an issue about a container names it.
 
 ## Planned kinds
 
-Kinds beyond workloads and pods (requirements F60–F67,
+Kinds beyond workloads and pods (requirements F60–F66,
 [P14](decisions.md#p14-resources-beyond-workloads)). The issue words and
-levels are a proposal, to be confirmed when they are implemented.
+levels are a proposal, to be confirmed when they are implemented. Custom
+resources (F67) are implemented, see [Objects](#objects) and
+[Issues](#issues).
 
 | Kind | Parent | Group header | Issues | Muted fact when fine |
 |---|---|---|---|---|
@@ -80,7 +91,6 @@ levels are a proposal, to be confirmed when they are implemented.
 | ConfigMap | namespace | `configmaps` | none | `3 keys` |
 | Secret | namespace | `secrets` | none | type, `3 keys` (values hidden, F64) |
 | Node | cluster | `nodes` (top level) | `not ready` (Danger); `pressure` (Warn): memory, disk or PID pressure; `cordoned` (Info): unschedulable | roles, version |
-| custom resource | namespace (or the top level if cluster-scoped) | `custom resources`, then its plural, e.g. `certificates`, alphabetically; only kinds with objects | `not ready` (Warn): `Ready` condition is `False`, with its reason | none |
 
 - A Service with no endpoints because its workload is scaled to zero is
   quiet, like the workload.

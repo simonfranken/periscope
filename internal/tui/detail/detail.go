@@ -103,7 +103,7 @@ func (m Model) lines(o *resource.Object, c *resource.Cluster) []string {
 	plain := lipgloss.NewStyle()
 
 	root := o.IsRoot() && c != nil
-	where := o.Kind.Name()
+	where := o.TypeName()
 	if o.Namespace != "" {
 		where = o.Namespace + " · " + where
 	}
@@ -139,10 +139,10 @@ func (m Model) lines(o *resource.Object, c *resource.Cluster) []string {
 	// "nothing to do" only if nothing below needs attention either
 	below := o.HiddenIssues()
 	if root {
-		below = hiddenIn(c.Namespaces)
+		below = hiddenIn(c.Objects)
 	}
 	if len(issues) == 0 && below.Total() == 0 {
-		out = append(out, label(theme.QuietWord(st))+muted.Render("nothing to do"))
+		out = append(out, label(theme.QuietWord(o))+muted.Render(theme.QuietText(o)))
 	}
 	if len(out) > 3 {
 		out = append(out, "")
@@ -153,12 +153,18 @@ func (m Model) lines(o *resource.Object, c *resource.Cluster) []string {
 		if c.Version != "" {
 			out = append(out, label("Version")+text.Render(c.Version))
 		}
-		summary := fmt.Sprintf("%d", len(c.Namespaces))
+		namespaces := 0
+		for _, o := range c.Objects {
+			if o.Kind == resource.KindNamespace {
+				namespaces++
+			}
+		}
+		summary := fmt.Sprintf("%d", namespaces)
 		if parts := m.hiddenParts(below); parts != "" {
 			summary += muted.Render(" · ") + parts
 		}
 		out = append(out, label("Namespaces")+summary)
-		return append(out, m.issuesBelow(c.Namespaces)...)
+		return append(out, m.issuesBelow(c.Objects)...)
 	}
 
 	if r := theme.Ready(o); r != "" && o.Kind != resource.KindPod {
@@ -183,6 +189,10 @@ func (m Model) lines(o *resource.Object, c *resource.Cluster) []string {
 		out = append(out, m.issuesBelow(o.Children)...)
 	}
 
+	if len(st.Conditions) > 0 {
+		out = append(out, "", muted.Bold(true).Render("Conditions"))
+		out = append(out, m.conditionLines(st, issues)...)
+	}
 	if len(st.Containers) > 0 {
 		out = append(out, "", muted.Bold(true).Render("Containers"))
 		out = append(out, m.containerLines(st, issues)...)
@@ -245,9 +255,37 @@ func (m Model) containerLines(st *resource.Status, issues []resource.Issue) []st
 	return out
 }
 
+// conditionLines are a custom resource's conditions: type, status (in the
+// color of the issue about it, muted otherwise) and reason; the message
+// below, muted.
+func (m Model) conditionLines(st *resource.Status, issues []resource.Issue) []string {
+	t := m.theme
+	muted, plain := theme.Fg(t.Muted), lipgloss.NewStyle()
+	var out []string
+	for _, c := range st.Conditions {
+		style := muted
+		if c.Type == "Ready" && c.Status == "False" {
+			for _, is := range issues {
+				if is.Kind == resource.IssueNotReady {
+					style = t.LevelStyle(is.Level, plain)
+				}
+			}
+		}
+		line := muted.Width(labelWidth).Render(c.Type) + style.Render(c.Status)
+		if c.Reason != "" {
+			line += muted.Render(" · " + c.Reason)
+		}
+		out = append(out, line)
+		if c.Message != "" {
+			out = append(out, strings.Repeat(" ", labelWidth)+muted.Render(c.Message))
+		}
+	}
+	return out
+}
+
 func childLabel(o *resource.Object) string {
 	if o.Kind == resource.KindNamespace {
-		return "Workloads"
+		return "Objects"
 	}
 	return "Pods"
 }

@@ -40,7 +40,8 @@ broken.
   header (`deployments`, `statefulsets`, …), in that order.
 - **F3** *(planned)* Pods without an owning workload are listed under a
   `pods` header of their namespace.
-- **F4** On startup only the namespaces are shown, collapsed.
+- **F4** On startup only the top level is shown: the namespaces, collapsed,
+  then the cluster-scoped objects below their headers (F67).
 - **F5** A collapsed object shows the number of its **direct** children,
   e.g. `[2]`.
 - **F6** A collapsed object shows the number of issues **hidden** in all
@@ -52,7 +53,7 @@ broken.
   collapsed and restored when it is expanded again (except after "collapse
   all below", which resets it for the collapsed objects).
 
-### More resource kinds (planned)
+### More resource kinds (planned, except F67)
 
 See [P14](decisions.md#p14-resources-beyond-workloads) and the
 [planned kinds](state-model.md#planned-kinds) of the state model.
@@ -82,16 +83,21 @@ See [P14](decisions.md#p14-resources-beyond-workloads) and the
 - **F66** Cluster-scoped resources: a `nodes` group at the top level, next
   to the namespaces, with issues per node (not ready, memory, disk or PID
   pressure, cordoned). PersistentVolumes are reached from their PVC.
-- **F67** Custom resources (CRDs, e.g. OpenShift Routes, cert-manager
+- **F67** *(UI implemented)* Custom resources (CRDs, e.g. OpenShift Routes, cert-manager
   Certificates, Argo CD Applications) are listed under a `custom resources`
   header of their namespace, with one header per kind below it (its plural,
   e.g. `certificates`), ordered alphabetically. A kind is shown in a
   namespace only if it has objects there, so CRDs that are installed but
   unused cost no rows. If two kinds share a plural, their API group is
-  added, muted (`applications argoproj.io`). Cluster-scoped custom
-  resources get the same section at the top level, after `nodes`. Their
-  state comes from the `Ready` condition, which most operators set. There
-  is no configuration: which kinds appear follows from the cluster alone.
+  added (`applications argoproj.io`); whether plurals collide is decided
+  over the whole cluster, so a kind has the same header in every namespace.
+  Cluster-scoped custom resources get the same section at the top level,
+  after the namespaces (and `nodes`, F66). Their state comes from the
+  `Ready` condition, which most operators set: `False` is `not ready`;
+  without a Ready condition the muted word is `unchecked`, not `healthy`
+  (F62). The detail pane lists all conditions. There is no configuration:
+  which kinds appear follows from the cluster alone. *(Implemented on mock
+  data; discovering the CRDs comes with the Kubernetes provider.)*
 
 ### State per object
 
