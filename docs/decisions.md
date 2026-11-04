@@ -142,6 +142,10 @@ wall of colored words that was cut on most terminals.
 **Decision.** The header shows one count per level, `n errors · n warnings
 · n notes`, the same summary as the tree's hidden counts and the detail
 pane. Objects that failed to load count as errors. The counts per kind move
-to the cluster's detail pane, as `Issues below`, one line per kind.
+to the cluster's detail pane, as `Issues below`, one line per kind. A
+namespace's detail pane has the same section: a namespace is where a
+problem is narrowed down, and it can hold hundreds of pods. Workloads and
+pods don't: a workload's own word sums up its pods, which the tree lists
+right below it, and the pane needs the space for the workload's state.
 **Consequences.** The header has a fixed, short shape however broken the
 cluster is; the breakdown is one key (`g`, home) away.

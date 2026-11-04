@@ -72,7 +72,10 @@ broken.
   with the last termination reason and when, and the image.
 - **F22** The recent **warning events** of the object, newest first: age,
   reason, count and message; at most five, the rest summarized.
-- **F23** Number of children and the issues below them.
+- **F23** Number of children and the issues below them. A namespace also
+  counts the issues below it per issue kind (`Issues below`, one line per
+  kind), like the cluster (F25); a workload doesn't, since its own word sums
+  up its pods.
 - **F25** The cluster (header selected): server, version, number of
   namespaces and the issues below, per level and per issue kind (one line
   per kind with the number of objects).

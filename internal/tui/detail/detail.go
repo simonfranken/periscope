@@ -158,11 +158,7 @@ func (m Model) lines(o *resource.Object, c *resource.Cluster) []string {
 			summary += muted.Render(" · ") + parts
 		}
 		out = append(out, label("Namespaces")+summary)
-		if kinds := m.kindLines(c.Namespaces); len(kinds) > 0 {
-			out = append(out, "", muted.Bold(true).Render("Issues below"))
-			out = append(out, kinds...)
-		}
-		return out
+		return append(out, m.issuesBelow(c.Namespaces)...)
 	}
 
 	if r := theme.Ready(o); r != "" && o.Kind != resource.KindPod {
@@ -180,6 +176,11 @@ func (m Model) lines(o *resource.Object, c *resource.Cluster) []string {
 			children += muted.Render(" · ") + parts + muted.Render(" below")
 		}
 		out = append(out, label(childLabel(o))+children)
+	}
+	// the counts per kind only for a namespace: a workload's own word already
+	// sums up its pods, which the tree lists right below it
+	if o.Kind == resource.KindNamespace {
+		out = append(out, m.issuesBelow(o.Children)...)
 	}
 
 	if len(st.Containers) > 0 {
@@ -259,9 +260,10 @@ func (m Model) hiddenParts(h resource.Hidden) string {
 	return m.theme.LevelCounts(h, ", ", lipgloss.NewStyle())
 }
 
-// kindLines count the objects of the cluster per issue kind, most severe
-// first, one line each: what the header summarizes per level.
-func (m Model) kindLines(roots []*resource.Object) []string {
+// issuesBelow is the "Issues below" section: the objects in roots and their
+// descendants counted per issue kind, most severe first, one line each;
+// nothing if there are no issues.
+func (m Model) issuesBelow(roots []*resource.Object) []string {
 	t := m.theme
 	plain := lipgloss.NewStyle()
 	errored := 0
@@ -277,7 +279,7 @@ func (m Model) kindLines(roots []*resource.Object) []string {
 	line := func(l resource.Level, word string, n int) string {
 		return t.LevelStyle(l, plain).Width(labelWidth).Render(word) + theme.Fg(t.Text).Render(fmt.Sprintf("%d", n))
 	}
-	var out []string
+	out := []string{"", theme.Fg(t.Muted).Bold(true).Render("Issues below")}
 	if errored > 0 {
 		out = append(out, line(resource.LevelDanger, "error", errored))
 	}
@@ -285,6 +287,9 @@ func (m Model) kindLines(roots []*resource.Object) []string {
 		if n := perKind[k]; n > 0 {
 			out = append(out, line(k.Level(), theme.IssueWord(k), n))
 		}
+	}
+	if len(out) == 2 {
+		return nil
 	}
 	return out
 }

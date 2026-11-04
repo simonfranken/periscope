@@ -124,6 +124,9 @@ indent ▸ name [n]   status          ready  age
    if there are none here and none below.
 3. Facts: `Ready 2/3 · 1 updated` (workloads), `Phase`, `Node` (pods),
    `Workloads` / `Pods` (count and the issues below).
+   - `Issues below` (namespaces and the cluster only): one line per issue
+     kind, the word in its color (12 columns) and the number of objects
+     with it, most severe first; left out if there are none.
 4. `Containers`: name, state (in the color of the issue about it, muted
    otherwise), restarts with the last reason and its age; the image below,
    muted.
@@ -131,8 +134,8 @@ indent ▸ name [n]   status          ready  age
    (yellow), `×count`, message; `… n more`.
 6. The palette at the bottom.
 
-For the cluster (header selected): `Server`, `Version` and `Namespaces`
-(count and the issues below).
+For the cluster (header selected): `Server`, `Version`, `Namespaces`
+(count and the issues below) and `Issues below`.
 
 ### Header
 
