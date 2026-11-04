@@ -3,7 +3,7 @@ package resource
 import "context"
 
 // Provider is the only way the UI reads cluster data. The mock provider
-// (package mock) and the Kubernetes provider (planned, client-go) are
+// (package mock) and the Kubernetes provider (package kube, client-go) are
 // interchangeable; see docs/architecture.md#provider-boundary.
 type Provider interface {
 	// Tree returns the cluster and its objects with Parent and Children
@@ -26,7 +26,8 @@ type Context struct {
 // and a provider for another one. Switching affects periscope only; the
 // kubeconfig (its current-context) is never written.
 type Switcher interface {
-	// Contexts lists the kubeconfig contexts, in kubeconfig order.
+	// Contexts lists the kubeconfig contexts in the order to show them
+	// (the Kubernetes provider sorts them by name, as kubectl does).
 	Contexts(ctx context.Context) ([]Context, error)
 	// Switch returns a provider for the context name. It must not talk to the
 	// cluster: like at startup, the tree loads afterwards (N1).

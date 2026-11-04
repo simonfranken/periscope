@@ -26,7 +26,10 @@ empty `Status`, is never loaded, and shows no state word.
 
 A Deployment's pods belong to it through its ReplicaSets, which are not
 shown: they are an implementation detail of a rollout. A Job created by a
-CronJob is listed under the CronJob *(planned, with the provider)*.
+CronJob is listed under the CronJob (`shop/cronjob/report/job/report-1`,
+no group header), its pods below it. A pod without a workload is a child
+of its namespace under `pods` (`shop/pod/debug`, F3). Ownership is the
+controller owner reference.
 
 ## Raw dimensions
 
@@ -39,6 +42,7 @@ CronJob is listed under the CronJob *(planned, with the provider)*.
 | `Terminating` | namespaces | `status.phase == Terminating` |
 | `Desired`, `Ready`, `Updated` | workloads | replicas (DaemonSet: `desiredNumberScheduled`, `numberReady`, `updatedNumberScheduled`) |
 | `Suspended` | CronJob, Job | `spec.suspend` |
+| `Phase` | Job | `Failed` if its condition `Failed` is true, `Succeeded` if `Complete` is; its replica fields stay zero, so a running Job is not `down` |
 | `Phase`, `Node` | pods | `status.phase`, `spec.nodeName` |
 | `Conditions` | custom resources only | `status.conditions`: type, status, reason, message. Not read for pods and workloads, whose state is in the fields above |
 | `Containers` | pods | `status.containerStatuses`: ready, state, reason, restarts, last termination reason and time |

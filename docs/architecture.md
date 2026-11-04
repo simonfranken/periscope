@@ -5,19 +5,23 @@ Go, [Bubble Tea](https://github.com/charmbracelet/bubbletea) (v1),
 [Bubbles](https://github.com/charmbracelet/bubbles) (key, help, spinner,
 textinput), [bubblezone](https://github.com/lrstanley/bubblezone) (mouse
 hit areas), [go-osc52](https://github.com/aymanbagabas/go-osc52) (clipboard).
-The same stack and versions as submarine. The Kubernetes provider will add
+The same stack and versions as submarine. The Kubernetes provider adds
 [client-go](https://github.com/kubernetes/client-go) (P5).
 
 ## Package layout
 
 ```
-cmd/periscope/main.go          wiring: choose the provider (--mock), update check, start the program; `update`, `version`
+cmd/periscope/main.go          wiring: choose the provider (--mock, --context), update check, start the program; `update`, `version`
 internal/resource/             domain model; NO UI imports
   model.go                     Cluster, Object, Kind, Status, Container, Event, Walk
   status.go                    Issues(), levels, HiddenIssues()
   provider.go                  Provider interface
 internal/resource/mock/        fixture cluster with every issue word, artificial latency
-internal/resource/kube/        (planned) provider using client-go
+internal/resource/kube/        provider using client-go
+  kube.go                      kubeconfig, client, Switcher
+  tree.go                      Tree: lists, owner links, snapshot; Status
+  status.go                    each kind's Status, warning events
+  stderr.go                    Quiet: klog, API warnings and exec plugins' stderr kept off the terminal
 internal/update/               self-update from GitHub releases; NO UI imports
 internal/tui/                  Bubble Tea application
   app.go                       root model: layout, message routing, loading, filter, problems only
@@ -71,7 +75,7 @@ Optional capabilities are type-asserted by the app, like submarine's
 
 ```go
 type Switcher interface {
-    Contexts(ctx context.Context) ([]Context, error) // kubeconfig contexts, in kubeconfig order
+    Contexts(ctx context.Context) ([]Context, error) // kubeconfig contexts (kube: sorted by name)
     Switch(name string) (Provider, error)            // a provider for another context; no API call
 }
 ```
@@ -99,22 +103,48 @@ type Logger interface {
 The mock provider (`internal/resource/mock`) covers every issue word and
 sleeps 100–800 ms per `Status` call to exercise the loading path.
 
-### Kubernetes provider (planned)
+### Kubernetes provider
+
+`internal/resource/kube` (P17).
 
 - `clientcmd` loads the kubeconfig with kubectl's rules (`KUBECONFIG`,
-  `--context`, `--namespace`), so contexts, exec credential plugins and
-  proxies work as in kubectl. Exec plugins run without a TTY: one that
-  needs interaction fails with its message instead of prompting.
-- `Tree` lists namespaces, workloads and pods with a few `List` calls (not
-  one per object) and links pods to workloads by owner references
-  (Pod → ReplicaSet → Deployment, Pod → Job → CronJob). The list results are
-  cached, so `Status` maps from the cache and is cheap; events are listed
-  once per namespace with `type=Warning`.
-- Concurrency is bounded (as submarine's D16), and every call has a
-  timeout, so an unreachable API server shows `error` instead of hanging.
-- `Watch` uses shared informers (watches instead of polling, P5) and
-  reports changes as `Change`, so the app reloads what changed, like
-  submarine's watcher (D20).
+  else `~/.kube/config`; `--context`, `--namespace`), so contexts, exec credential
+  plugins, legacy auth providers and proxies work as in kubectl. `New`
+  reads the file and makes the client, without an API call; an unknown
+  context or a broken kubeconfig ends periscope before the UI starts, like
+  kubectl. `Cluster.Namespace` is the context's own namespace (not
+  clientcmd's `default` fallback).
+- Exec plugins run with `StdinUnavailable`: one that needs input fails
+  with its message instead of prompting. A plugin that waits anyway (a
+  device-code login) can't be cancelled, so `Tree` gives up after 45 s.
+- The terminal belongs to the UI: `kube.Quiet`, called by `main` before
+  `New`, drops klog and API deprecation warnings and points `os.Stderr` at
+  a pipe until the program ends. What a plugin writes there (client-go
+  passes it the process's stderr) is kept, and a failing `Tree` puts it
+  first in its error ("Please visit … and enter code …"). The request's
+  URL is dropped from errors, so the footer line has room for the reason.
+- `Tree` lists namespaces, then in parallel Deployments, StatefulSets,
+  DaemonSets, ReplicaSets, Jobs, CronJobs and pods, cluster-wide, 500 per
+  page, and the server version (waited for at most 1 s after them). It links pods to
+  workloads by the controller owner reference's UID (Pod → ReplicaSet →
+  Deployment, Pod → StatefulSet/DaemonSet, Pod → Job → CronJob); pods
+  without one go under `pods` in their namespace (F3). The statuses are
+  mapped right away into a snapshot, which `Status` reads, so `Status` is
+  cheap.
+- Forbidden is not fatal: if namespaces can't be listed, the one of
+  `--namespace`, else the context's, else `default` is the only one and
+  every kind is listed in it; a kind that can't be listed cluster-wide is listed per namespace
+  (8 at a time); what can't be listed at all is left out. Other errors
+  (unauthorized, unreachable) fail `Tree`, so the UI shows them.
+- Events: the first `Status` call after a `Tree` lists the cluster's
+  warning events once (`type=Warning`, per namespace if need be, 30 s) and
+  sorts them to objects by the involved object's UID (by kind and name if
+  it has none). A ReplicaSet's events go to its Deployment (`FailedCreate`
+  of a quota). If events can't be listed, objects have none.
+- Every request has a 30 s timeout; QPS 50, burst 100.
+- *(planned)* `Watch` uses shared informers (watches instead of polling,
+  P5) and reports changes as `Change`, so the app reloads what changed,
+  like submarine's watcher (D20).
 
 ## Loading flow
 
@@ -199,6 +229,8 @@ go test ./...
 
 - `internal/resource`: issue classification and hidden-issue aggregation.
 - `internal/resource/mock`: every issue word occurs, paths are unique.
+- `internal/resource/kube`: owner links, groups, statuses and events
+  against client-go's fake clientset, Forbidden fallbacks, contexts.
 - `internal/tui/tree`: navigation, filter and problems-only rules. Tests
   need `zone.NewGlobal()` (see `TestMain`).
 - `internal/tui/footer`: key bar dropping order, help pages.
@@ -215,6 +247,14 @@ tmux send-keys -t peri -l '/'     # one key at a time: a burst of keys
 tmux send-keys -t peri -l 'shop'  # arrives as one message
 tmux capture-pane -pt peri        # add -e to see colors
 tmux kill-session -t peri
+```
+
+Against a real cluster, e.g. a `kind` cluster with its own kubeconfig, so
+yours stays untouched:
+
+```sh
+KUBECONFIG=/tmp/kind.yaml kind create cluster --name peri
+KUBECONFIG=/tmp/kind.yaml /tmp/periscope
 ```
 
 *(planned)* Integration tests against a `kind` cluster built by a script,

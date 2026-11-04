@@ -5,8 +5,9 @@ shows what needs attention and makes the current state of the cluster
 (objects, YAML, events) easy to browse; both are equally important. A
 sibling of
 [submarine](https://github.com/simonfranken/submarine), with its principles,
-stack and release process. Currently a skeleton: the UI runs on mock data;
-the client-go provider is next.
+stack and release process. It reads real clusters through the client-go
+provider (`internal/resource/kube`); `--mock` runs on built-in data. Watches
+and more resource kinds are next.
 
 ## Read first
 
@@ -23,6 +24,7 @@ and decisions. Read the relevant document before changing behavior:
 ## Commands
 
 ```sh
+go run ./cmd/periscope        # the current kubeconfig context
 go run ./cmd/periscope --mock # run on mock data
 make dist                     # cross-compile into dist/
 make release                  # publish a tagged release to GitHub (outward-facing; run by the developer)

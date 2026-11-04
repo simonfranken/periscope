@@ -319,7 +319,8 @@ dropped and it is drawn in `Backdrop`, so the popup has the focus.
 ╰──────────────────────────────────────────────────────────────────────╯
 ```
 
-- The kubeconfig contexts in kubeconfig order; right-aligned and muted the
+- The kubeconfig contexts, sorted by name (as `kubectl config
+  get-contexts`; the mock keeps its own order); right-aligned and muted the
   cluster and the context's namespace. The current context is bold with
   `*` and selected when the popup opens.
 - Border `Border`, title in `Primary` bold, search prompt `Primary`, the

@@ -43,8 +43,10 @@ broken.
   anywhere in it, goes back.
 - **F2** Group the workloads of a namespace by kind under a non-selectable
   header (`deployments`, `statefulsets`, …), in that order.
-- **F3** *(planned)* Pods without an owning workload are listed under a
-  `pods` header of their namespace.
+- **F3** Pods without an owning workload (static pods, bare pods, pods of
+  an operator or of a ReplicaSet without a Deployment) are listed under a
+  `pods` header of their namespace, after the workloads, so no pod is
+  left out. A Job created by a CronJob is listed under the CronJob.
 - **F4** On startup the cluster level is shown, or the namespace given by
   `--namespace`, else the one the kubeconfig context sets. Inside a
   namespace everything starts collapsed. The flow is the same for every
@@ -197,14 +199,15 @@ restart a rollout, scale, delete a pod.
 ## Usage
 
 ```sh
-periscope --mock [--namespace NAME]   # built-in mock cluster; -n NAME for short
+periscope [--context NAME] [--namespace NAME]  # the current (or given) kubeconfig context; -n NAME for short
+periscope --mock [--namespace NAME]            # built-in mock cluster
 periscope update [--check] [--force]
 periscope version
 ```
 
-*(planned)* `periscope [--context NAME] [--namespace NAME]` reads the
-cluster of the current (or given) kubeconfig context. `--namespace` starts
-inside that namespace (F4).
+`--namespace` starts inside that namespace (F4). An unknown context or a
+kubeconfig that can't be read ends periscope with kubectl's message, before
+the UI starts; a cluster that can't be reached is shown in the UI.
 
 - **F58** On every start the tool looks for a newer release in the
   background (never blocking, silent on failure; off for dev builds,

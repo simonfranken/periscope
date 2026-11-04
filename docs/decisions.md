@@ -256,3 +256,29 @@ provider without contexts simply doesn't offer it.
 **Consequences.** The only picker; namespaces are opened from the cluster
 level (P15). Answers from the old provider are dropped by identity. Nothing
 about the switch is remembered between runs.
+
+## P17: The Kubernetes provider reads a snapshot, never prompts, keeps stderr
+
+**Context.** P5 chose client-go. A real cluster brings what the mock
+didn't: thousands of objects, RBAC that forbids some lists, exec plugins
+that write to the terminal or wait for a browser login, and client-go
+logging to stderr, all under a full-screen UI.
+**Decision.** `Tree` makes one paged List per kind, cluster-wide, and maps
+every status into a snapshot; `Status` reads it, and the warning events
+are listed once per `Tree` by the first `Status`. Pods are linked to
+workloads by owner UID; pods without one go under `pods` (F3), Jobs of a
+CronJob below it. Forbidden narrows what is shown (namespaces: the
+context's only; a kind: per namespace, else left out); every other error
+fails `Tree`. Exec plugins get no stdin, `Tree` gives up after 45 s, and
+stderr is captured while the UI runs: klog and API warnings are dropped,
+a plugin's own words lead the error. Contexts are sorted by name, as
+`kubectl config get-contexts` does, since merged kubeconfigs have no order.
+**Alternatives.** One `Get` per object in `Status`: thousands of requests
+for what a few Lists return. Informers right away: the snapshot is the
+same mapping, and watches come next (README step 2). Leaving stderr alone:
+plugin output and log lines would paint over the UI and be lost.
+**Consequences.** `r` re-reads the whole cluster; the tree is only as
+fresh as the last `Tree` until watches come. A kind the user may not list
+is missing silently until F65's `error` group exists. A user who may list
+namespaces but no kind cluster-wide costs one List per kind and namespace;
+with hundreds of namespaces that can exceed `Tree`'s 45 s.

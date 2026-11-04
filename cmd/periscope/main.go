@@ -13,6 +13,7 @@ import (
 	zone "github.com/lrstanley/bubblezone"
 
 	"periscope/internal/resource"
+	"periscope/internal/resource/kube"
 	"periscope/internal/resource/mock"
 	"periscope/internal/tui"
 	"periscope/internal/update"
@@ -33,11 +34,12 @@ func main() {
 	}
 
 	useMock := flag.Bool("mock", false, "use built-in mock data instead of a cluster")
+	kubeContext := flag.String("context", "", "the kubeconfig context to read instead of the current one")
 	var namespace string
 	flag.StringVar(&namespace, "namespace", "", "start inside this namespace instead of the context's")
 	flag.StringVar(&namespace, "n", "", "short for --namespace")
 	flag.Usage = func() {
-		fmt.Fprintln(flag.CommandLine.Output(), "usage: periscope --mock [--namespace NAME]\n       periscope update [--check] [--force]\n       periscope version")
+		fmt.Fprintln(flag.CommandLine.Output(), "usage: periscope [--context NAME] [--namespace NAME]\n       periscope --mock [--namespace NAME]\n       periscope update [--check] [--force]\n       periscope version")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -47,13 +49,20 @@ func main() {
 	}
 
 	var provider resource.Provider
+	restoreStderr := func() {}
 	if *useMock {
 		provider = mock.New()
 	} else {
-		// The Kubernetes provider (client-go) is the next step, see
-		// docs/README.md; until then only the mock data can be shown.
-		fmt.Fprintln(os.Stderr, "periscope: no cluster provider yet; run `periscope --mock` to see the mock cluster")
-		os.Exit(2)
+		// client-go must not write over the UI: from here on stderr is
+		// captured, until the terminal is restored.
+		restoreStderr = kube.Quiet()
+		p, err := kube.New(*kubeContext, namespace)
+		if err != nil {
+			restoreStderr()
+			fmt.Fprintln(os.Stderr, "periscope:", err)
+			os.Exit(1)
+		}
+		provider = p
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -73,6 +82,7 @@ func main() {
 
 	p := tea.NewProgram(tui.New(ctx, provider, opts...), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	final, err := p.Run()
+	restoreStderr()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

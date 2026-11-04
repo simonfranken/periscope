@@ -41,11 +41,16 @@ Installs `peri` and `periscope` (linux/macOS, amd64/arm64) to
 ## Try it
 
 ```sh
+peri                 # the cluster of the current kubeconfig context
+peri --context prod  # another context
+peri -n shop         # start inside the namespace shop
 peri --mock          # built-in sample cluster
 ```
 
-Reading a real cluster from your kubeconfig is the next step; see
-[docs/README.md](docs/README.md#status).
+periscope reads the kubeconfig like kubectl (`KUBECONFIG`, then
+`~/.kube/config`), including exec credential plugins. It only reads, and it
+never prompts: a login that needs a browser fails with the plugin's message,
+so log in with kubectl first.
 
 ## Keys
 
@@ -65,8 +70,6 @@ Reading a real cluster from your kubeconfig is the next step; see
 | `r` | Reload |
 | `?` | Full help: every key, then what the words mean (`esc` closes it) |
 | `q` | Quit. If a newer release exists, the footer offers `q quit and update to vX` (highlighted), and plain quit moves to `Q` |
-
-`periscope --mock -n shop` starts inside the namespace `shop`.
 
 The mouse works too: click to select, click `▸` to toggle or open, click the
 context in the header to go back, wheel to move.
