@@ -114,7 +114,7 @@ sleeps 100–800 ms per `Status` call to exercise the loading path.
   rows. Grouping uses `Object.Group` and keeps the order of first
   appearance.
 - Navigation methods (`Up`, `Down`, `Left`, `Right`, `Toggle`,
-  `CollapseAll`, `ExpandAll`, `Home`, `End`, `PageUp`, `PageDown`) are plain
+  `CollapseBelow`, `ExpandBelow`, `Home`, `End`, `PageUp`, `PageDown`) are plain
   methods without Bubble Tea dependencies, so they are unit-tested directly.
 - Key mapping happens in `app.go`; the tree only handles mouse messages.
 - Mouse zones: `toggle:<path>` and `row:<path>`, prefixed per instance.
@@ -187,7 +187,7 @@ Manual check in a headless terminal:
 ```sh
 go build -o /tmp/periscope ./cmd/periscope
 tmux new-session -d -s peri -x 130 -y 30 "/tmp/periscope --mock"
-tmux send-keys -t peri L          # expand all
+tmux send-keys -t peri L          # expand all below the selection
 tmux send-keys -t peri -l '/'     # one key at a time: a burst of keys
 tmux send-keys -t peri -l 'shop'  # arrives as one message
 tmux capture-pane -pt peri        # add -e to see colors

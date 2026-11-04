@@ -274,10 +274,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.tree.Right()
 	case key.Matches(msg, k.Toggle):
 		m.tree.Toggle()
-	case key.Matches(msg, k.CollapseAll):
-		m.tree.CollapseAll()
-	case key.Matches(msg, k.ExpandAll):
-		m.tree.ExpandAll()
+	case key.Matches(msg, k.CollapseBelow):
+		m.tree.CollapseBelow()
+	case key.Matches(msg, k.ExpandBelow):
+		m.tree.ExpandBelow()
 	case key.Matches(msg, k.Home):
 		m.tree.Home()
 	case key.Matches(msg, k.End):

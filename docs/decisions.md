@@ -72,7 +72,7 @@ free, writes happen only on a user's action, and nothing prompts.
 collapsed on start; workloads below them, grouped by kind under muted,
 non-selectable headers (`deployments`, …); pods below their workload.
 ReplicaSets are not shown. Navigation is branch-first (`→` enters, `←`
-leaves, `H`/`L` all). Collapsed parents count the issues below them, one
+leaves, `H`/`L` all below, see P13). Collapsed parents count the issues below them, one
 count per level. The cluster itself is the header, selectable like
 submarine's superproject.
 **Amendment to submarine D7.** A collapsed parent without issues of its own
@@ -149,3 +149,19 @@ pods don't: a workload's own word sums up its pods, which the tree lists
 right below it, and the pane needs the space for the workload's state.
 **Consequences.** The header has a fixed, short shape however broken the
 cluster is; the breakdown is one key (`g`, home) away.
+
+## P13: Expand and collapse all below the selection
+
+**Context.** submarine's `L` / `H` expand and collapse the whole tree
+(D8), which suits a repository with a handful of submodules. In a cluster
+with hundreds of namespaces and thousands of pods, expanding everything is
+a wall of rows; users are usually interested in one namespace.
+**Decision.** `L` expands the selection and everything below it, `H`
+collapses it and forgets what was expanded below; siblings stay as they
+are, and `L` keeps the selection (submarine followed the first child down
+to a leaf). With nothing to collapse (a leaf, a collapsed object) `H` acts
+on the parent and selects it, like `h`, so repeating it climbs up. On the
+header "everything below" is the cluster, so there both keys keep the old
+global meaning, two keys away (`g`, then `H` or `L`).
+**Consequences.** No separate global keys. The footer says `all below`.
+`L` on a large namespace still opens a long list; `H` closes it again.

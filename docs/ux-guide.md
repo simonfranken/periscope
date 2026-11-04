@@ -37,7 +37,7 @@ is the reference for periscope.
                                                                 │ Warnings
                                                                 │ 40s  BackOff ×61 Back-off restarting failed container app
                                                                 │ c copy name
- ↑↓/jk move • ←→/hl collapse/expand • ⇧←→/HL all • space toggle • ! problems only • / filter • r reload   ? help • q quit
+ ↑↓/jk move • ←→/hl collapse/expand • ⇧←→/HL all below • space toggle • ! problems only • / filter • r reload   ? help • q quit
 ```
 
 | Area | Height / width |
@@ -205,8 +205,8 @@ colors in components.
 | `space` | Toggle expand/collapse of the selection |
 | `→` / `l` | Header selected: first namespace. Collapsed with children: expand and select the first child. Expanded: select the first child. Leaf: nothing |
 | `←` / `h` | Expanded: collapse it (stays selected). Otherwise: collapse the parent and select it. Top level: select the header |
-| `L` / `shift+→` / `ctrl+→` | Expand all; then follow the first child from the selection down to a leaf |
-| `H` / `shift+←` / `ctrl+←` | Collapse all (resets remembered expansion); select the top-level ancestor |
+| `L` / `shift+→` / `ctrl+→` | Expand the selection and everything below it; the selection and its siblings stay. On the header: everything |
+| `H` / `shift+←` / `ctrl+←` | Collapse the selection and everything below it (resets remembered expansion there); siblings stay. With nothing to collapse (a leaf, a collapsed object) it collapses the parent and selects it, so repeating it climbs up. On the header: everything |
 | `home` / `g`, `end` / `G` | Header / last object |
 | `pgup`, `pgdn` | Move by one screen |
 | `?` | Full help: keys, then the legend, then closed |
@@ -266,7 +266,7 @@ the full help.
 |---|---|---|---|
 | `↑` / `k`, `↓` / `j` | Move selection | Navigation | Bar, Help |
 | `←` / `h`, `→` / `l` | Fold / unfold, parent / first child | Navigation | Bar, Help |
-| `H` / `⇧←`, `L` / `⇧→` | Collapse / expand all | Navigation | Bar, Help |
+| `H` / `⇧←`, `L` / `⇧→` | Collapse / expand all below | Navigation | Bar, Help |
 | `space` | Toggle expand/collapse | Navigation | Bar, Help |
 | `home` / `g`, `end` / `G` | Header / last object | Navigation | Help |
 | `pgup`, `pgdn` | Move by one screen | Navigation | Help |
@@ -305,5 +305,5 @@ restart: it sits next to `r` (reload), the reason submarine's restore is `x`
 ## Accessibility and terminals
 
 - `PERISCOPE_ASCII=1`: ASCII symbols (`> v . *`) instead of Unicode.
-- Many setups capture `ctrl+←/→`, so expand/collapse all also work as
+- Many setups capture `ctrl+←/→`, so expand/collapse all below also work as
   `shift+→/←` and as `L` / `H`.

@@ -8,7 +8,7 @@ import (
 
 type keyMap struct {
 	Up, Down, Left, Right, Toggle key.Binding
-	CollapseAll, ExpandAll        key.Binding
+	CollapseBelow, ExpandBelow    key.Binding
 	Home, End, PageUp, PageDown   key.Binding
 	Reload, Filter, Issues        key.Binding
 	Copy                          key.Binding
@@ -17,24 +17,24 @@ type keyMap struct {
 
 func defaultKeys() keyMap {
 	return keyMap{
-		Up:          key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
-		Down:        key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
-		Left:        key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("←/h", "collapse, parent")),
-		Right:       key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("→/l", "expand, first child")),
-		Toggle:      key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "toggle")),
-		CollapseAll: key.NewBinding(key.WithKeys("shift+left", "ctrl+left", "H"), key.WithHelp("H/⇧←", "collapse all")),
-		ExpandAll:   key.NewBinding(key.WithKeys("shift+right", "ctrl+right", "L"), key.WithHelp("L/⇧→", "expand all")),
-		Home:        key.NewBinding(key.WithKeys("home", "g"), key.WithHelp("home/g", "first")),
-		End:         key.NewBinding(key.WithKeys("end", "G"), key.WithHelp("end/G", "last")),
-		PageUp:      key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "page up")),
-		PageDown:    key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "page down")),
-		Reload:      key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "reload")),
-		Filter:      key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
-		Issues:      key.NewBinding(key.WithKeys("!"), key.WithHelp("!", "problems only")),
-		Copy:        key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "copy name")),
-		Help:        key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
-		Quit:        key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
-		QuitUpdate:  key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit and update"), key.WithDisabled()),
+		Up:            key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
+		Down:          key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
+		Left:          key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("←/h", "collapse, parent")),
+		Right:         key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("→/l", "expand, first child")),
+		Toggle:        key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "toggle")),
+		CollapseBelow: key.NewBinding(key.WithKeys("shift+left", "ctrl+left", "H"), key.WithHelp("H/⇧←", "collapse all below")),
+		ExpandBelow:   key.NewBinding(key.WithKeys("shift+right", "ctrl+right", "L"), key.WithHelp("L/⇧→", "expand all below")),
+		Home:          key.NewBinding(key.WithKeys("home", "g"), key.WithHelp("home/g", "first")),
+		End:           key.NewBinding(key.WithKeys("end", "G"), key.WithHelp("end/G", "last")),
+		PageUp:        key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "page up")),
+		PageDown:      key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "page down")),
+		Reload:        key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "reload")),
+		Filter:        key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
+		Issues:        key.NewBinding(key.WithKeys("!"), key.WithHelp("!", "problems only")),
+		Copy:          key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "copy name")),
+		Help:          key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
+		Quit:          key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
+		QuitUpdate:    key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit and update"), key.WithDisabled()),
 	}
 }
 
@@ -49,7 +49,7 @@ func (k *keyMap) SetUpdate(v string) {
 func (k keyMap) Navigation() []key.Binding {
 	move := key.NewBinding(key.WithKeys("up"), key.WithHelp("↑↓/jk", "move"))
 	fold := key.NewBinding(key.WithKeys("left"), key.WithHelp("←→/hl", "collapse/expand"))
-	all := key.NewBinding(key.WithKeys("H"), key.WithHelp("⇧←→/HL", "all"))
+	all := key.NewBinding(key.WithKeys("H"), key.WithHelp("⇧←→/HL", "all below"))
 	return []key.Binding{move, fold, all, k.Toggle}
 }
 
@@ -86,7 +86,7 @@ func (k keyMap) HelpGroups() []footer.Group {
 	help := key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "what words mean"))
 	esc := key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "close"))
 	return []footer.Group{
-		{Title: "Move", Keys: []key.Binding{k.Up, k.Down, k.Left, k.Right, k.Toggle, k.CollapseAll, k.ExpandAll}},
+		{Title: "Move", Keys: []key.Binding{k.Up, k.Down, k.Left, k.Right, k.Toggle, k.CollapseBelow, k.ExpandBelow}},
 		{Title: "Jump", Keys: []key.Binding{k.Home, k.End, k.PageUp, k.PageDown}},
 		{Title: "Selected", Keys: k.Resource()},
 		{Title: "Everything", Keys: []key.Binding{k.Issues, k.Filter, k.Reload}},

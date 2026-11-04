@@ -156,26 +156,58 @@ func (m *Model) Left() {
 	}
 }
 
-// CollapseAll collapses every object and selects the top-level ancestor
-// of the current selection.
-func (m *Model) CollapseAll() {
-	m.expanded = map[string]bool{}
-	for m.cursor != nil && m.cursor.Parent != nil {
-		m.cursor = m.cursor.Parent
+// below returns the objects directly below s: the top level for the cluster.
+func (m *Model) below(s *resource.Object) []*resource.Object {
+	if s == m.root {
+		return m.roots
 	}
-	m.clampOffset()
+	return s.Children
 }
 
-// ExpandAll expands every object and follows the first child from the
-// current selection down to an object without children.
-func (m *Model) ExpandAll() {
-	resource.Walk(m.roots, func(s *resource.Object) {
+// ExpandBelow expands the selection and everything below it; siblings and
+// the selection stay. On the cluster it expands everything.
+func (m *Model) ExpandBelow() {
+	if m.cursor == nil {
+		return
+	}
+	if len(m.cursor.Children) > 0 {
+		m.expanded[m.cursor.Path] = true
+	}
+	resource.Walk(m.below(m.cursor), func(s *resource.Object) {
 		if len(s.Children) > 0 {
 			m.expanded[s.Path] = true
 		}
 	})
-	for m.cursor != nil && len(m.cursor.Children) > 0 {
-		m.Down() // children directly follow their parent
+	m.clampOffset()
+}
+
+// CollapseBelow collapses the selection and everything below it, and
+// forgets what was expanded there; siblings stay. With nothing to collapse
+// (a leaf or a collapsed object) it acts on the parent and selects it, so
+// repeating it climbs up. On the cluster it collapses everything.
+func (m *Model) CollapseBelow() {
+	s := m.cursor
+	if s == nil {
+		return
+	}
+	if s != m.root && !m.expanded[s.Path] {
+		switch {
+		case s.Parent != nil:
+			s = s.Parent
+		case m.root != nil:
+			s = m.root // the cluster is the parent of the top level
+		default:
+			m.expanded = map[string]bool{} // no cluster row: collapse everything
+			m.clampOffset()
+			return
+		}
+		m.cursor = s
+	}
+	if s == m.root {
+		m.expanded = map[string]bool{}
+	} else {
+		delete(m.expanded, s.Path)
+		resource.Walk(s.Children, func(c *resource.Object) { delete(m.expanded, c.Path) })
 	}
 	m.clampOffset()
 }

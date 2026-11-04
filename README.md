@@ -53,7 +53,7 @@ Reading a real cluster from your kubeconfig is the next step; see
 |---|---|
 | `↑` `↓` / `j` `k` | Move |
 | `←` `→` / `h` `l` | Fold / unfold, parent / first child |
-| `H` `L` / `⇧←` `⇧→` | Collapse / expand all |
+| `H` `L` / `⇧←` `⇧→` | Collapse / expand all below the selection (everything on the header) |
 | `space` | Toggle the selected object |
 | `home` `end` / `g` `G`, `pgup` `pgdn` | Jump, page |
 | `!` | Problems only |

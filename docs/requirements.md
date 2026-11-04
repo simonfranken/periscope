@@ -49,8 +49,8 @@ broken.
   it then shows no word, since `healthy` would read as if everything below
   were fine.
 - **F7** Expansion state of descendants is remembered when a parent is
-  collapsed and restored when it is expanded again (except after
-  "collapse all", which resets it).
+  collapsed and restored when it is expanded again (except after "collapse
+  all below", which resets it for the collapsed objects).
 
 ### State per object
 

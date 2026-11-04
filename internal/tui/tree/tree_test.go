@@ -219,42 +219,68 @@ func TestScrollKeepsCursorVisible(t *testing.T) {
 	}
 }
 
-func TestCollapseAllSelectsTopLevelAncestor(t *testing.T) {
+func TestExpandBelowKeepsSelectionAndSiblings(t *testing.T) {
+	m := newTree(t)
+	m.Down() // b
+	m.ExpandBelow()
+	assertCursor(t, m, "b")
+	assertRows(t, m, "a", "src", "b", "modules", "c", "d", "e", "f")
+	if m.expanded["a"] || m.expanded["f"] {
+		t.Fatal("siblings must stay collapsed")
+	}
+}
+
+func TestExpandBelowOnLeafIsNoop(t *testing.T) {
+	m := newTree(t) // cursor a, a leaf
+	m.ExpandBelow()
+	assertCursor(t, m, "a")
+	if m.expanded["b"] || m.expanded["c"] {
+		t.Fatal("a leaf has nothing below to expand")
+	}
+}
+
+func TestCollapseBelowForgetsExpansion(t *testing.T) {
+	m := newTree(t)
+	m.Down() // b
+	m.ExpandBelow()
+	m.CollapseBelow()
+	assertCursor(t, m, "b")
+	assertRows(t, m, "a", "src", "b", "f")
+	m.Toggle() // re-expanding b must not restore c's expansion
+	if m.expanded["c"] {
+		t.Fatal("c should be collapsed after CollapseBelow on b")
+	}
+}
+
+func TestCollapseBelowClimbsFromLeaf(t *testing.T) {
 	m := newTree(t)
 	m.Down()
 	m.Right() // c
-	m.Right() // d
-	m.CollapseAll()
+	m.Right() // d, a leaf
+	m.CollapseBelow()
+	assertCursor(t, m, "c")
+	if m.expanded["c"] || !m.expanded["b"] {
+		t.Fatal("CollapseBelow on a leaf collapses only its parent")
+	}
+	m.CollapseBelow() // c is collapsed now: climbs to b
 	assertCursor(t, m, "b")
-	got := visible(m)
-	want := []string{"a", "src", "b", "f"}
-	if len(got) != len(want) {
-		t.Fatalf("rows = %v, want %v", got, want)
-	}
-	m.Toggle() // re-expanding b must not restore c's expansion
-	if m.expanded["c"] {
-		t.Fatal("c should be collapsed after CollapseAll")
-	}
+	assertRows(t, m, "a", "src", "b", "f")
 }
 
-func TestExpandAllDescendsFirstChildren(t *testing.T) {
+func TestCollapseBelowKeepsSiblings(t *testing.T) {
 	m := newTree(t)
 	m.Down() // b
-	m.ExpandAll()
-	assertCursor(t, m, "d")
-	got := visible(m)
-	want := []string{"a", "src", "b", "modules", "c", "d", "e", "f"}
-	if len(got) != len(want) {
-		t.Fatalf("rows = %v, want %v", got, want)
-	}
+	m.ExpandBelow()
+	m.Down() // c
+	m.CollapseBelow()
+	assertCursor(t, m, "c")
+	assertRows(t, m, "a", "src", "b", "modules", "c", "e", "f")
 }
 
-func TestExpandAllOnLeafKeepsSelection(t *testing.T) {
-	m := newTree(t) // cursor a, a leaf
-	m.ExpandAll()
-	assertCursor(t, m, "a")
-	if !m.expanded["b"] || !m.expanded["c"] {
-		t.Fatal("all nodes with children should be expanded")
+func assertRows(t *testing.T, m *Model, want ...string) {
+	t.Helper()
+	if got := visible(m); strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("rows = %v, want %v", got, want)
 	}
 }
 
@@ -372,18 +398,28 @@ func TestRootNavigationKeys(t *testing.T) {
 	}
 	m.Left()
 	m.Toggle()
-	m.CollapseAll()
-	m.ExpandAll()
+	m.ExpandBelow() // on the cluster: everything
 	if !m.RootSelected() {
 		t.Error("fold keys must not move the root selection")
 	}
+	assertRows(t, m, "a", "src", "b", "modules", "c", "d", "e", "f")
+	m.CollapseBelow() // on the cluster: everything
+	if !m.RootSelected() {
+		t.Error("fold keys must not move the root selection")
+	}
+	assertRows(t, m, "a", "src", "b", "f")
 
 	m.Down()
 	m.Down() // b
 	m.Right()
 	m.Right() // d
-	m.CollapseAll()
+	m.CollapseBelow()
+	m.CollapseBelow()
 	assertCursor(t, m, "b")
+	m.CollapseBelow() // a collapsed top-level object climbs to the cluster
+	if !m.RootSelected() {
+		t.Error("CollapseBelow on a collapsed top-level object should select the root")
+	}
 }
 
 func TestReplaceRootsKeepsRootSelected(t *testing.T) {
