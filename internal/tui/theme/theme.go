@@ -31,7 +31,7 @@ func Default() Theme {
 		g = ASCII()
 	}
 	return Theme{
-		Primary:  lipgloss.Color("6"), // cyan
+		Primary:  lipgloss.Color("5"), // magenta
 		Info:     lipgloss.Color("4"), // blue
 		Warn:     lipgloss.Color("3"), // yellow
 		Danger:   lipgloss.Color("1"), // red

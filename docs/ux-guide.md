@@ -157,7 +157,7 @@ colors in components.
 | Danger | ANSI `1` red, bold | `down`, `crashloop`, `oom killed`, `pull error`, `failed`, `error` |
 | Warn | ANSI `3` yellow | `pending`, `not ready`, `degraded`, `restarting`, event reasons, `problems only` |
 | Info | ANSI `4` blue | `rolling out`, `suspended`, `terminating` |
-| Primary | ANSI `6` cyan | the context, spinner, filter prompt |
+| Primary | ANSI `5` magenta | the context, spinner, filter prompt |
 | Muted | ANSI `8` grey | quiet rows, group headers, labels, ages, images |
 | Text | terminal default | normal text |
 | Border | ANSI `8` grey | pane and help separators |

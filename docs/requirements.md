@@ -10,6 +10,13 @@ and the events. It doesn't answer the questions users actually have:
 - Is anything broken in this cluster, and where?
 - Why is it broken?
 - Which parts are fine, so I can ignore them?
+- What is running, in what state, with which spec, and what happened to it
+  lately? (The questions of a user who is not hunting a problem.)
+
+Both kinds of question are equally important (see
+[P11](decisions.md#p11-inspecting-the-cluster-is-as-important-as-finding-problems)):
+periscope is a tool for browsing the cluster as much as for finding what is
+broken.
 
 ## Goals
 
@@ -18,6 +25,8 @@ and the events. It doesn't answer the questions users actually have:
 - Summarize each object's state as **one word**; let **problems stand out**
   and keep healthy objects quiet.
 - Explain the problem where it is shown: issue, container states, events.
+- Make the **current state of every object** easy to inspect: its fields,
+  its YAML and its events, not only when something is wrong.
 - Work comfortably with **hundreds of namespaces and thousands of pods**.
 
 ## Functional requirements
@@ -66,6 +75,10 @@ and the events. It doesn't answer the questions users actually have:
 - **F23** Number of children and the issues below them.
 - **F25** The cluster (header selected): server, version, number of
   namespaces and the issues below.
+- **F26** *(planned)* The YAML of the selected object, as `kubectl get -o
+  yaml` shows it, in a pager.
+- **F27** *(planned)* All events of the selected object (normal and
+  warning), newest first, in a pager.
 
 ### Header and footer
 

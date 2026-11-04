@@ -5,6 +5,11 @@ of a cluster** as a collapsible tree (namespaces, then workloads, then pods;
 the cluster itself in the header) and summarizes each object's state as
 **one word**, so problems stand out and healthy objects stay quiet.
 
+Unlike submarine, finding problems is not the first priority but one of two
+equal ones: periscope is just as much for **looking at the cluster as it
+is**, its objects, their state, their YAML and their events, as kubectl
+would show them, only faster to reach (see [P11](decisions.md#p11-inspecting-the-cluster-is-as-important-as-finding-problems)).
+
 It is a sibling of [submarine](https://github.com/simonfranken/submarine)
 (a TUI for git submodules) and shares its principles, stack, release,
 install and update process. Decisions taken over from submarine name their
@@ -49,7 +54,8 @@ Next steps, roughly in order:
 3. **Context and namespace pickers** (`C`, `n`): popups like submarine's
    branch picker, with a dimmed backdrop.
 4. **Read actions**: logs (`v`, the previous container's logs for a
-   crashloop) and describe (`d`), in a pager.
+   crashloop), describe (`d`), the YAML of an object and all its events
+   (not only warnings), in a pager.
 5. **Write actions**: restart a rollout (`t`), scale (`s`), delete a pod
    (`x`). Each asks first if something would be lost (submarine D23).
 6. A fixture for integration tests: a `kind` cluster script, like

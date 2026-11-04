@@ -34,7 +34,11 @@ does not do.
 
 **Decision.** As submarine D10: ANSI 0–15 for all meaning, `AdaptiveColor`
 only for backgrounds (bar, selection, backdrop), background detected before
-Bubble Tea starts.
+Bubble Tea starts. The one difference is the accent (`Primary`): magenta
+(ANSI 5), where submarine uses cyan, so the two tools are told apart at a
+glance. Red, yellow and blue carry levels, green would read as healthy, so
+magenta is the free hue; the grey backgrounds stay, since a tint would cost
+contrast for the state words on the selected row.
 
 ## P4: Provider boundary and async loading
 
@@ -113,3 +117,18 @@ Planned keys avoid two conflicts: logs are `v`, not `l` as in k9s (`l`
 moves right, as in submarine); restarting a rollout is `t`, not `R`, which
 sits next to `r` (reload; submarine D23 chose `x` over `R` for the same
 reason).
+
+## P11: Inspecting the cluster is as important as finding problems
+
+**Context.** submarine's first priority is what needs attention; a clean
+repository has little else to show. A cluster does: users open it to see
+what is deployed, in which version, with which spec, and what happened to it
+lately, without anything being broken.
+**Decision.** periscope has two equal use cases: finding problems
+(severity, one word, problems only) and inspecting the current state of the
+cluster (objects, their fields, YAML and events). Attention still follows
+severity (P2), but the inspecting side is not secondary: viewing an
+object's YAML and all its events gets first-class keys and views.
+**Consequences.** The detail pane and the planned pagers show the full
+state of healthy objects too, not only the reasons for an issue. Features
+are not judged only by whether they help find a problem.

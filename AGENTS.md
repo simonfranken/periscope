@@ -1,7 +1,9 @@
 # AGENTS.md
 
 periscope: a Go + Bubble Tea TUI for Kubernetes clusters, a kubectl that
-shows what needs attention. A sibling of
+shows what needs attention and makes the current state of the cluster
+(objects, YAML, events) easy to browse; both are equally important. A
+sibling of
 [submarine](https://github.com/simonfranken/submarine), with its principles,
 stack and release process. Currently a skeleton: the UI runs on mock data;
 the client-go provider is next.
