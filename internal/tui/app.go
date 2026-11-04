@@ -257,7 +257,11 @@ func (m Model) treeLoaded(msg treeLoadedMsg) (tea.Model, tea.Cmd) {
 		// start inside --namespace, else the context's namespace
 		switch {
 		case m.namespace != "":
-			if !m.tree.EnterPath(m.namespace) {
+			switch {
+			case m.tree.EnterPath(m.namespace):
+			case m.tree.TopLevel(m.namespace) != nil:
+				cmds = append(cmds, m.footer.Flash(m.namespace+" is empty"))
+			default:
 				cmds = append(cmds, m.footer.Flash("no namespace "+m.namespace))
 			}
 		case m.cluster.Namespace != "":

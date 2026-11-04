@@ -63,7 +63,9 @@ contents without the namespace row, and the header becomes a breadcrumb:
 Keys come in four groups (`keyMap.Navigation`, `.Tools`, `.Resource`,
 `.Global`):
 
-- **Navigation** (move, collapse/expand, toggle): left in the footer.
+- **Navigation**: left in the footer, by level. At the cluster level `↑↓/jk
+  move • →/enter open`; inside a namespace `↑↓/jk move • ←→/hl
+  collapse/expand • ⇧←→/HL all below • space toggle • ⌫ back`.
 - **Tools** (`!` problems only, `/` filter, `r` reload): in the footer after
   the navigation keys, most useful first.
 - **Global** (`?`, `q`): right-aligned in the footer, always kept. If a newer

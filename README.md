@@ -52,18 +52,23 @@ Reading a real cluster from your kubeconfig is the next step; see
 | Key | Action |
 |---|---|
 | `↑` `↓` / `j` `k` | Move |
-| `←` `→` / `h` `l` | Fold / unfold, parent / first child |
-| `H` `L` / `⇧←` `⇧→` | Collapse / expand all below the selection (everything on the header) |
-| `space` | Toggle the selected object |
+| `→` / `l`, `enter` | Open a namespace from the cluster level; inside: unfold, first child |
+| `←` / `h` | Fold, parent; from the top of a namespace: back to the cluster level |
+| `⌫` | Back to the cluster level |
+| `H` `L` / `⇧←` `⇧→` | Collapse / expand all below the selection (all of the namespace on the header) |
+| `space` | Toggle the selected object (open it at the cluster level) |
 | `home` `end` / `g` `G`, `pgup` `pgdn` | Jump, page |
 | `!` | Problems only |
-| `/` | Filter by namespace, kind or name |
+| `/` | Filter what the current level shows: namespaces, or kind and name inside one |
 | `c` | Copy the name (`deployment/api`) |
 | `r` | Reload |
 | `?` | Full help: every key, then what the words mean (`esc` closes it) |
 | `q` | Quit. If a newer release exists, the footer offers `q quit and update to vX` (highlighted), and plain quit moves to `Q` |
 
-The mouse works too: click to select, click `▸` to toggle, wheel to move.
+`periscope --mock -n shop` starts inside the namespace `shop`.
+
+The mouse works too: click to select, click `▸` to toggle or open, click the
+context in the header to go back, wheel to move.
 
 ## Documentation
 

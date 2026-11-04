@@ -174,8 +174,11 @@ func (m *Model) Enter(o *resource.Object) {
 	m.clampOffset()
 }
 
+// TopLevel returns the top-level object with the given path, or nil.
+func (m Model) TopLevel(path string) *resource.Object { return m.topLevel(path) }
+
 // EnterPath enters the top-level object with the given path and reports
-// whether there is one.
+// whether it could: there is one, and it has objects.
 func (m *Model) EnterPath(path string) bool {
 	o := m.topLevel(path)
 	if o == nil || len(o.Children) == 0 {
@@ -198,6 +201,9 @@ func (m *Model) Back() {
 	m.scope = nil
 	m.filter = ""
 	m.offset = 0
+	if m.narrowed() { // problems only may not list the namespace left
+		m.reselect(m.cursor)
+	}
 	m.clampOffset()
 }
 

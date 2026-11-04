@@ -50,7 +50,10 @@ Next steps, roughly in order:
 1. **Kubernetes provider** (`internal/resource/kube`, client-go, P5): read
    the kubeconfig like kubectl (`--context`, `--namespace`, `KUBECONFIG`),
    list namespaces, workloads and pods, map them to `resource.Status`, and
-   load warning events. Bounded concurrency, never block startup.
+   load warning events. Bounded concurrency, never block startup. Set
+   `Cluster.Namespace` from the context; if listing namespaces is forbidden,
+   return the context's namespace as the only one (F4), so users with
+   rights in one namespace get the same flow.
 2. **Watch** (`resource.Watcher`): informers keep the tree live, so a pod
    that starts crashing shows up without `r`.
 3. **More resource kinds** (F60–F67, P14), in this order: Services,

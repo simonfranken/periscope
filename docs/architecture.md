@@ -191,8 +191,8 @@ Manual check in a headless terminal:
 
 ```sh
 go build -o /tmp/periscope ./cmd/periscope
-tmux new-session -d -s peri -x 130 -y 30 "/tmp/periscope --mock"
-tmux send-keys -t peri L          # expand all below the selection
+tmux new-session -d -s peri -x 130 -y 30 "/tmp/periscope --mock -n shop"
+tmux send-keys -t peri L          # inside shop: expand all below the selection
 tmux send-keys -t peri -l '/'     # one key at a time: a burst of keys
 tmux send-keys -t peri -l 'shop'  # arrives as one message
 tmux capture-pane -pt peri        # add -e to see colors

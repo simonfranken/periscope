@@ -787,3 +787,16 @@ func TestReloadInsideNamespace(t *testing.T) {
 		t.Fatal("a vanished namespace leads back to the cluster level")
 	}
 }
+
+func TestBackWithProblemsOnlyKeepsSelectionVisible(t *testing.T) {
+	m := clusterTree(t)
+	m.topLevel("shop").Children[1].Status.Phase = resource.PhaseFailed
+	m.EnterPath("payments") // no problems
+	m.SetProblemsOnly(true)
+	m.Back() // payments is not listed at the cluster level now
+	if m.cursorRow(m.rows()) < 0 && !m.RootSelected() {
+		t.Fatalf("selection %q is not visible", m.Selected().Path)
+	}
+	m.Down()
+	assertCursor(t, m, "shop")
+}
