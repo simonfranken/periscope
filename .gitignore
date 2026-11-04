@@ -1,0 +1,39 @@
+# Binaries
+/periscope
+/bin/
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Delve build output
+__debug_bin*
+
+# Test and coverage output
+*.test
+*.out
+coverage.*
+*.coverprofile
+
+# Go workspace files (local)
+go.work
+go.work.sum
+
+# Environment
+.env
+
+# Editors and IDEs
+.idea/
+.vscode/
+.zed/
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Claude Code local settings
+.claude/settings.local.json
