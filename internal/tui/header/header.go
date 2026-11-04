@@ -12,7 +12,7 @@ import (
 	"periscope/internal/tui/theme"
 )
 
-// View renders the context, the counts per issue kind and what is still
+// View renders the context, the issue counts per level and what is still
 // loading, on one line. The header stands for the cluster: with selected it
 // is drawn like a selected tree row.
 func View(t theme.Theme, c *resource.Cluster, spinner string, width int, selected bool) string {
@@ -36,9 +36,9 @@ func View(t theme.Theme, c *resource.Cluster, spinner string, width int, selecte
 		left += seg(t.Text, "  ") + t.StatusWord(r, bar, spinner)
 	}
 
-	// count objects per issue kind (most severe first)
-	var namespaces, pods, loading, errored int
-	perKind := map[resource.IssueKind]int{}
+	// one count per level, like the tree's hidden counts; the counts per
+	// issue kind are in the cluster's detail pane
+	var namespaces, pods, loading int
 	resource.Walk(c.Namespaces, func(o *resource.Object) {
 		switch o.Kind {
 		case resource.KindNamespace:
@@ -46,26 +46,15 @@ func View(t theme.Theme, c *resource.Cluster, spinner string, width int, selecte
 		case resource.KindPod:
 			pods++
 		}
-		switch {
-		case o.Err != nil:
-			errored++
-		case o.Status == nil:
+		if o.Err == nil && o.Status == nil {
 			loading++
-		}
-		for _, is := range o.Status.Issues() {
-			perKind[is.Kind]++
 		}
 	})
 
 	sep := seg(t.Muted, " · ")
 	var parts []string
-	if errored > 0 {
-		parts = append(parts, t.LevelStyle(resource.LevelDanger, bar).Render(fmt.Sprintf("%d error", errored)))
-	}
-	for _, k := range resource.Kinds {
-		if n := perKind[k]; n > 0 {
-			parts = append(parts, t.LevelStyle(k.Level(), bar).Render(fmt.Sprintf("%d %s", n, theme.IssueWord(k))))
-		}
+	if counts := t.LevelCounts((&resource.Object{Children: c.Namespaces}).HiddenIssues(), " · ", bar); counts != "" {
+		parts = append(parts, counts)
 	}
 	if loading > 0 {
 		parts = append(parts, seg(t.Muted, fmt.Sprintf("%d loading", loading)))

@@ -132,3 +132,16 @@ object's YAML and all its events gets first-class keys and views.
 **Consequences.** The detail pane and the planned pagers show the full
 state of healthy objects too, not only the reasons for an issue. Features
 are not judged only by whether they help find a problem.
+
+## P12: The header counts issues per level, not per kind
+
+**Context.** The header showed one count per issue kind, as submarine does
+for its few states. A cluster has many kinds of issues at once (`down`,
+`crashloop`, `pull error`, `pending`, `degraded`, …), and the line became a
+wall of colored words that was cut on most terminals.
+**Decision.** The header shows one count per level, `n errors · n warnings
+· n notes`, the same summary as the tree's hidden counts and the detail
+pane. Objects that failed to load count as errors. The counts per kind move
+to the cluster's detail pane, as `Issues below`, one line per kind.
+**Consequences.** The header has a fixed, short shape however broken the
+cluster is; the breakdown is one key (`g`, home) away.

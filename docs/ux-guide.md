@@ -20,7 +20,7 @@ is the reference for periscope.
 ## Layout
 
 ```
- kind-dev  v1.34.1   1 down · 1 crashloop · 1 oom killed · 2 pull error · … · 7 namespaces · 22 pods
+ kind-dev  v1.34.1                              7 errors · 9 warnings · 3 notes · 7 namespaces · 22 pods
  ▸ default [1]                     healthy                 90d  │ shop · pod
  ▸ payments [2]                    ·3 ·4                   90d  │ api-7b8d9f6c5-zp6qx                 age 25m
  ▾ shop                            healthy                 90d  │
@@ -139,13 +139,16 @@ For the cluster (header selected): `Server`, `Version` and `Namespaces`
 The header is the cluster's row: selected on startup and drawn with the
 selected background (bold) while selected.
 
-`context  version  [state]   n error · <count> <issue>… · n loading · n namespaces · n pods`
+`context  version  [state]   n errors · n warnings · n notes · n loading · n namespaces · n pods`
 
 The cluster's own state word is shown only if it says something (an issue,
-loading, `error`). The counts form one group at the right edge. Issue
-counts are ordered by severity, each in its level color; zero counts are
-omitted. If the line is too narrow it is cut with `…` at the right end, so
-the most severe counts stay.
+loading, `error`). The counts form one group at the right edge. Issues are
+counted **per level**, as in the tree's hidden counts (`·1 ·2 ·3`): danger
+(including objects that failed to load), warn and info, each in its level
+color; zero counts are omitted. A real cluster has many kinds of issues at
+once, and one count per kind overloaded the line; the counts per kind are
+in the cluster's detail pane (`Issues below`). If the line is too narrow it
+is cut with `…` at the right end, so the most severe counts stay.
 
 ## Colors
 

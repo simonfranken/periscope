@@ -2,6 +2,7 @@ package theme
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
@@ -173,4 +174,23 @@ func Age(t time.Time) string {
 	default:
 		return fmt.Sprintf("%dd", int(d.Hours()/24))
 	}
+}
+
+// LevelCounts renders the issues of h as one count per level, most severe
+// first, each in its level color and joined by sep: "1 error · 3 warnings ·
+// 2 notes". Zero counts are left out; "" if there are none. base is applied
+// to every segment, e.g. to keep a bar background.
+func (t Theme) LevelCounts(h resource.Hidden, sep string, base lipgloss.Style) string {
+	var parts []string
+	add := func(l resource.Level, n int, one, many string) {
+		if n == 1 {
+			parts = append(parts, t.LevelStyle(l, base).Render("1 "+one))
+		} else if n > 1 {
+			parts = append(parts, t.LevelStyle(l, base).Render(fmt.Sprintf("%d %s", n, many)))
+		}
+	}
+	add(resource.LevelDanger, h.Danger, "error", "errors")
+	add(resource.LevelWarn, h.Warn, "warning", "warnings")
+	add(resource.LevelInfo, h.Info, "note", "notes")
+	return strings.Join(parts, base.Foreground(t.Muted).Render(sep))
 }

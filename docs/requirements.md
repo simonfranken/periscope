@@ -74,7 +74,8 @@ broken.
   reason, count and message; at most five, the rest summarized.
 - **F23** Number of children and the issues below them.
 - **F25** The cluster (header selected): server, version, number of
-  namespaces and the issues below.
+  namespaces and the issues below, per level and per issue kind (one line
+  per kind with the number of objects).
 - **F26** *(planned)* The YAML of the selected object, as `kubectl get -o
   yaml` shows it, in a pager.
 - **F27** *(planned)* All events of the selected object (normal and
@@ -82,10 +83,11 @@ broken.
 
 ### Header and footer
 
-- **F30** The header shows the context, the server version, a count per
-  issue kind (most severe first), how many objects are still loading or
-  failed, and the number of namespaces and pods. If it is too narrow it is
-  cut at the right end, so the most severe counts stay.
+- **F30** The header shows the context, the server version, the issues
+  below as one count per level (`7 errors · 9 warnings · 3 notes`; objects
+  that failed to load count as errors), how many objects are still loading,
+  and the number of namespaces and pods. If it is too narrow it is cut at
+  the right end, so the most severe counts stay.
 - **F31** The footer shows key hints; `?` steps through the full help and
   the legend. It shows short messages for a moment (e.g. `copied
   deployment/api`).

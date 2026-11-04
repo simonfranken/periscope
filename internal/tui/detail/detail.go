@@ -157,7 +157,12 @@ func (m Model) lines(o *resource.Object, c *resource.Cluster) []string {
 		if parts := m.hiddenParts(below); parts != "" {
 			summary += muted.Render(" · ") + parts
 		}
-		return append(out, label("Namespaces")+summary)
+		out = append(out, label("Namespaces")+summary)
+		if kinds := m.kindLines(c.Namespaces); len(kinds) > 0 {
+			out = append(out, "", muted.Bold(true).Render("Issues below"))
+			out = append(out, kinds...)
+		}
+		return out
 	}
 
 	if r := theme.Ready(o); r != "" && o.Kind != resource.KindPod {
@@ -251,16 +256,35 @@ func hiddenIn(roots []*resource.Object) resource.Hidden {
 }
 
 func (m Model) hiddenParts(h resource.Hidden) string {
+	return m.theme.LevelCounts(h, ", ", lipgloss.NewStyle())
+}
+
+// kindLines count the objects of the cluster per issue kind, most severe
+// first, one line each: what the header summarizes per level.
+func (m Model) kindLines(roots []*resource.Object) []string {
 	t := m.theme
-	var parts []string
-	if h.Danger > 0 {
-		parts = append(parts, t.LevelStyle(resource.LevelDanger, lipgloss.NewStyle()).Render(fmt.Sprintf("%d error(s)", h.Danger)))
+	plain := lipgloss.NewStyle()
+	errored := 0
+	perKind := map[resource.IssueKind]int{}
+	resource.Walk(roots, func(o *resource.Object) {
+		if o.Err != nil {
+			errored++
+		}
+		for _, is := range o.Status.Issues() {
+			perKind[is.Kind]++
+		}
+	})
+	line := func(l resource.Level, word string, n int) string {
+		return t.LevelStyle(l, plain).Width(labelWidth).Render(word) + theme.Fg(t.Text).Render(fmt.Sprintf("%d", n))
 	}
-	if h.Warn > 0 {
-		parts = append(parts, t.LevelStyle(resource.LevelWarn, lipgloss.NewStyle()).Render(fmt.Sprintf("%d warning(s)", h.Warn)))
+	var out []string
+	if errored > 0 {
+		out = append(out, line(resource.LevelDanger, "error", errored))
 	}
-	if h.Info > 0 {
-		parts = append(parts, t.LevelStyle(resource.LevelInfo, lipgloss.NewStyle()).Render(fmt.Sprintf("%d note(s)", h.Info)))
+	for _, k := range resource.Kinds {
+		if n := perKind[k]; n > 0 {
+			out = append(out, line(k.Level(), theme.IssueWord(k), n))
+		}
 	}
-	return strings.Join(parts, theme.Fg(t.Muted).Render(", "))
+	return out
 }
