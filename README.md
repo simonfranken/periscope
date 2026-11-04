@@ -61,6 +61,7 @@ Reading a real cluster from your kubeconfig is the next step; see
 | `!` | Problems only |
 | `/` | Filter what the current level shows: namespaces, or kind and name inside one |
 | `c` | Copy the name (`deployment/api`) |
+| `C` | Switch the kubeconfig context (periscope only; the kubeconfig is never written) |
 | `r` | Reload |
 | `?` | Full help: every key, then what the words mean (`esc` closes it) |
 | `q` | Quit. If a newer release exists, the footer offers `q quit and update to vX` (highlighted), and plain quit moves to `Q` |

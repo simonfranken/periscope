@@ -17,6 +17,7 @@ import (
 	"periscope/internal/tui/detail"
 	"periscope/internal/tui/footer"
 	"periscope/internal/tui/header"
+	"periscope/internal/tui/picker"
 	"periscope/internal/tui/theme"
 	"periscope/internal/tui/tree"
 )
@@ -60,6 +61,9 @@ type Model struct {
 
 	namespace string // --namespace: where to start; "" for the context's namespace
 	level     string // the path of the tree's scope, "" at the cluster level
+
+	picker    *picker.Model // the context picker, nil if closed
+	switching string        // the context whose tree is loading, "" if none
 }
 
 // WithNamespace starts inside the namespace name instead of the kubeconfig
@@ -123,16 +127,18 @@ func (m Model) lookForUpdate() tea.Cmd {
 }
 
 func (m Model) loadTree() tea.Cmd {
+	p, ctx := m.provider, m.ctx
 	return func() tea.Msg {
-		c, err := m.provider.Tree(m.ctx)
-		return treeLoadedMsg{c, err}
+		c, err := p.Tree(ctx)
+		return treeLoadedMsg{p, c, err}
 	}
 }
 
 func (m Model) loadStatus(path string) tea.Cmd {
+	p, ctx := m.provider, m.ctx
 	return func() tea.Msg {
-		st, err := m.provider.Status(m.ctx, path)
-		return statusLoadedMsg{path, st, err}
+		st, err := p.Status(ctx, path)
+		return statusLoadedMsg{p, path, st, err}
 	}
 }
 
@@ -141,7 +147,8 @@ func (m Model) busy() bool {
 	if m.cluster == nil {
 		return true
 	}
-	loading := m.cluster.Root != nil && m.cluster.Root.Status == nil && m.cluster.Root.Err == nil
+	loading := m.switching != "" || (m.picker != nil && m.picker.Loading()) ||
+		m.cluster.Root != nil && m.cluster.Root.Status == nil && m.cluster.Root.Err == nil
 	resource.Walk(m.cluster.Objects, func(o *resource.Object) {
 		loading = loading || (o.Status == nil && o.Err == nil)
 	})
@@ -174,9 +181,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case treeLoadedMsg:
+		if msg.from != m.provider {
+			return m, nil // for a context switched away from
+		}
 		return m.treeLoaded(msg)
 
+	case contextsMsg:
+		return m.contextsLoaded(msg)
+
+	case switchedMsg:
+		return m.switched(msg)
+
 	case statusLoadedMsg:
+		if msg.from != m.provider {
+			return m, nil
+		}
 		if o, ok := m.byPath[msg.path]; ok {
 			if msg.err != nil {
 				o.Err = msg.err
@@ -192,6 +211,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		m.tree.SetSpinner(m.spinner.View())
 		m.detail.SetSpinner(m.spinner.View())
+		if m.picker != nil {
+			m.picker.SetSpinner(m.spinner.View())
+		}
 		if !m.busy() {
 			m.ticking = false // stop ticking until there is work again
 			return m, nil
@@ -199,11 +221,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 
 	case tea.MouseMsg:
+		if m.picker != nil {
+			return m.mousePicker(msg)
+		}
 		m.tree.Update(msg)
 		m.syncLevel()
 		return m, nil
 
 	case tea.KeyMsg:
+		if m.picker != nil {
+			return m.pickContext(msg)
+		}
 		next, cmd := m.handleKey(msg)
 		mm := next.(Model)
 		mm.syncLevel()
@@ -267,6 +295,7 @@ func (m Model) treeLoaded(msg treeLoadedMsg) (tea.Model, tea.Cmd) {
 		case m.cluster.Namespace != "":
 			m.tree.EnterPath(m.cluster.Namespace)
 		}
+		m.namespace = "" // the flag is for the first context only
 	} else {
 		m.tree.ReplaceRoots(m.cluster.Objects)
 		if gone != "" && m.tree.Scope() == nil {
@@ -337,6 +366,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.filtering = true
 		m.layout()
 		return m, m.filter.Focus()
+	case key.Matches(msg, k.Context):
+		return m.openPicker()
 	case key.Matches(msg, k.Issues):
 		m.tree.SetProblemsOnly(!m.tree.ProblemsOnly())
 		m.layout()
@@ -507,5 +538,11 @@ func (m Model) View() string {
 	case m.hint:
 		parts = append(parts, m.hintView())
 	}
-	return zone.Scan(lipgloss.JoinVertical(lipgloss.Left, append(parts, m.footer.View())...))
+	view := zone.Scan(lipgloss.JoinVertical(lipgloss.Left, append(parts, m.footer.View())...))
+	if m.picker != nil { // after zone.Scan, so no zone marker is cut
+		pop := m.picker.View(m.width, m.height)
+		x, y := m.picker.Origin(m.width, m.height)
+		view = overlay(view, pop, x, y, theme.Fg(m.theme.Backdrop))
+	}
+	return view
 }

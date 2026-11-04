@@ -66,8 +66,24 @@ type Provider interface {
 - `Object.Path` is the unique ID (see
   [state-model.md](state-model.md#objects)).
 
-Planned optional capabilities, type-asserted by the app like submarine's
-(`Fetcher`, `Watcher`, …):
+Optional capabilities are type-asserted by the app, like submarine's
+`Fetcher`. Implemented:
+
+```go
+type Switcher interface {
+    Contexts(ctx context.Context) ([]Context, error) // kubeconfig contexts, in kubeconfig order
+    Switch(name string) (Provider, error)            // a provider for another context; no API call
+}
+```
+
+The app keeps the current provider until the new one's `Tree` succeeds.
+Tree and status answers name the provider they come from, and answers of a
+provider that was switched away from are dropped, so a slow status of the
+old context never lands in the new tree. The mock has three contexts
+(`kind-dev`, `staging` with namespace `shop`, and `prod-eu`, whose `Tree`
+fails like an exec plugin that needs a browser).
+
+Planned:
 
 ```go
 type Watcher interface {

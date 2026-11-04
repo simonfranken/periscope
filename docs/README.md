@@ -40,8 +40,8 @@ Installs `periscope` and the alias `peri` (linux/macOS, amd64/arm64) to
 **Skeleton.** The UI runs on built-in mock data (`periscope --mock`):
 the cluster level and opening namespaces (`--namespace`), the tree
 (including custom resources, F67), the detail pane, the header,
-problems only (`!`), the filter (`/`),
-copy name (`c`), the full help and legend (`?`), and the update check.
+problems only (`!`), the filter (`/`), the context picker (`C`, three mock
+contexts, one of which can't be reached), copy name (`c`), the full help and legend (`?`), and the update check.
 Without `--mock` periscope exits with a hint, because there is no cluster
 provider yet.
 
@@ -53,20 +53,18 @@ Next steps, roughly in order:
    load warning events. Bounded concurrency, never block startup. Set
    `Cluster.Namespace` from the context; if listing namespaces is forbidden,
    return the context's namespace as the only one (F4), so users with
-   rights in one namespace get the same flow.
+   rights in one namespace get the same flow. Implement `resource.Switcher`
+   over the kubeconfig's contexts (F57).
 2. **Watch** (`resource.Watcher`): informers keep the tree live, so a pod
    that starts crashing shows up without `r`.
 3. **More resource kinds** (F60–F67, P14), in this order: Services,
    Ingresses and PVCs (they have real states); ConfigMaps and Secrets (for
    browsing, values hidden); nodes; discovering the custom resources (the
    UI for them is done).
-4. **Context picker** (`C`): a popup like submarine's branch picker, with a
-   dimmed backdrop; switches periscope's cluster, never the kubeconfig.
-   Namespaces need no picker: they are opened from the cluster level (P15).
-5. **Read actions**: logs (`v`, the previous container's logs for a
+4. **Read actions**: logs (`v`, the previous container's logs for a
    crashloop), describe (`d`), the YAML of an object and all its events
    (not only warnings), in a pager.
-6. **Write actions**: restart a rollout (`t`), scale (`s`), delete a pod
+5. **Write actions**: restart a rollout (`t`), scale (`s`), delete a pod
    (`x`). Each asks first if something would be lost (submarine D23).
-7. A fixture for integration tests: a `kind` cluster script, like
+6. A fixture for integration tests: a `kind` cluster script, like
    submarine's `scripts/make-fixture.sh`.

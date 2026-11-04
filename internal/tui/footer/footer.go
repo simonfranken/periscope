@@ -15,7 +15,10 @@ import (
 	"periscope/internal/tui/theme"
 )
 
-const flashDuration = 2 * time.Second
+const (
+	flashDuration = 2 * time.Second
+	alertDuration = 8 * time.Second // long enough to read an error
+)
 
 type clearFlashMsg struct{ id int }
 
@@ -93,11 +96,16 @@ func (m *Model) CloseHelp() { m.page = pageBar }
 func (m Model) Legend() bool { return m.page == pageLegend }
 
 // Flash shows msg for a short time instead of the key hints.
-func (m *Model) Flash(msg string) tea.Cmd {
+func (m *Model) Flash(msg string) tea.Cmd { return m.flashFor(msg, flashDuration) }
+
+// Alert is Flash for an error, shown longer so it can be read.
+func (m *Model) Alert(msg string) tea.Cmd { return m.flashFor(msg, alertDuration) }
+
+func (m *Model) flashFor(msg string, d time.Duration) tea.Cmd {
 	m.flashID++
 	m.flash = msg
 	id := m.flashID
-	return tea.Tick(flashDuration, func(time.Time) tea.Msg { return clearFlashMsg{id} })
+	return tea.Tick(d, func(time.Time) tea.Msg { return clearFlashMsg{id} })
 }
 
 func (m *Model) Update(msg tea.Msg) {
@@ -109,7 +117,8 @@ func (m *Model) Update(msg tea.Msg) {
 func (m Model) View() string {
 	style := lipgloss.NewStyle().Width(m.width).Padding(0, 1)
 	if m.flash != "" {
-		return style.Foreground(m.theme.Warn).Render(m.flash)
+		// one line, so a long message doesn't push the layout
+		return style.Foreground(m.theme.Warn).Render(ansi.Truncate(m.flash, max(m.width-2, 1), "…"))
 	}
 	switch m.page {
 	case pageKeys:

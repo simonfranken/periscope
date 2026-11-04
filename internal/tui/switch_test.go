@@ -1,0 +1,65 @@
+package tui
+
+import (
+	"context"
+	"os"
+	"testing"
+
+	zone "github.com/lrstanley/bubblezone"
+
+	"periscope/internal/resource"
+	"periscope/internal/resource/mock"
+)
+
+func TestMain(m *testing.M) {
+	zone.NewGlobal()
+	os.Exit(m.Run())
+}
+
+func TestSwitchDropsAnswersOfTheOldContext(t *testing.T) {
+	old := mock.New()
+	m := New(context.Background(), old)
+	c, _ := old.Tree(context.Background())
+	next, _ := m.Update(treeLoadedMsg{old, c, nil})
+	m = next.(Model)
+
+	p, err := old.Switch("staging")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc, _ := p.Tree(context.Background())
+	m.switching = "staging"
+	next, _ = m.Update(switchedMsg{"staging", p, sc, nil})
+	m = next.(Model)
+	if m.provider != p || m.cluster.Context != "staging" || m.switching != "" {
+		t.Fatalf("not switched: context %q, switching %q", m.cluster.Context, m.switching)
+	}
+	if s := m.tree.Scope(); s == nil || s.Name != "shop" {
+		t.Errorf("staging's context sets shop, scope = %v", s)
+	}
+
+	failed := &resource.Status{Phase: resource.PhaseFailed}
+	next, _ = m.Update(statusLoadedMsg{old, "shop/deployment/api", failed, nil})
+	m = next.(Model)
+	if m.byPath["shop/deployment/api"].Status == failed {
+		t.Error("a status of the old context landed in the new tree")
+	}
+	next, _ = m.Update(treeLoadedMsg{old, c, nil})
+	if next.(Model).cluster.Context != "staging" {
+		t.Error("a tree of the old context replaced the new one")
+	}
+}
+
+func TestFailedSwitchKeepsTheCluster(t *testing.T) {
+	old := mock.New()
+	m := New(context.Background(), old)
+	c, _ := old.Tree(context.Background())
+	next, _ := m.Update(treeLoadedMsg{old, c, nil})
+	m = next.(Model)
+	m.switching = "prod-eu"
+	next, _ = m.Update(switchedMsg{"prod-eu", nil, nil, context.DeadlineExceeded})
+	m = next.(Model)
+	if m.provider != old || m.cluster.Context != "kind-dev" || m.switching != "" || m.err != nil {
+		t.Errorf("a failed switch must keep kind-dev: context %q, err %v", m.cluster.Context, m.err)
+	}
+}

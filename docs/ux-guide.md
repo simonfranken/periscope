@@ -30,7 +30,7 @@ Two levels (P15). The **cluster level** lists the namespaces and, under
    legacy-feature           terminating            400d  │ Server      https://127.0.0.1:6443
  cluster                                                 │ Namespaces  8 · 7 errors, 10 warnings, 3 notes
    ▸ custom resources [1]                                │
- ↑↓/jk move • →/enter open • ! problems only • / filter • r reload             ? help • q quit
+ ↑↓/jk move • →/enter open • ! problems only • / filter • C context • r reload ? help • q quit
 ```
 
 `→` / `enter` on a namespace (or section) **opens** it: the tree shows its
@@ -47,7 +47,7 @@ contents without the namespace row, and the header becomes a breadcrumb:
  ▸ custom resources [4]          ·1                             │ Phase       Running
                                                                 │ Node        node-2
                                                                 │ c copy name
- ↑↓/jk move • ←→/hl collapse/expand • ⇧←→/HL all below • space toggle • ⌫ back • ! problems only • / filter • r reload
+ ↑↓/jk move • ←→/hl collapse/expand • ⇧←→/HL all below • space toggle • ⌫ back • ! problems only • / filter • C context • r reload
 ```
 
 | Area | Height / width |
@@ -66,7 +66,7 @@ Keys come in four groups (`keyMap.Navigation`, `.Tools`, `.Resource`,
 - **Navigation**: left in the footer, by level. At the cluster level `↑↓/jk
   move • →/enter open`; inside a namespace `↑↓/jk move • ←→/hl
   collapse/expand • ⇧←→/HL all below • space toggle • ⌫ back`.
-- **Tools** (`!` problems only, `/` filter, `r` reload): in the footer after
+- **Tools** (`!` problems only, `/` filter, `C` context, `r` reload): in the footer after
   the navigation keys, most useful first.
 - **Global** (`?`, `q`): right-aligned in the footer, always kept. If a newer
   release exists, `q quit and update to vX` follows them as the right-most
@@ -205,7 +205,7 @@ colors in components.
 | Border | ANSI `8` grey | pane and help separators |
 | Bar | adaptive 254 (light) / 235 (dark) | header background |
 | Selected | adaptive 253 (light) / 237 (dark) | selected row background |
-| Backdrop | adaptive 252 (light) / 238 (dark) | the screen behind a popup (planned pickers) |
+| Backdrop | adaptive 252 (light) / 238 (dark) | the screen behind a popup (the context picker) |
 | Highlight | ANSI `0` black, bold, on Primary | the `quit and update` hint in the footer |
 
 - Background shades have no ANSI-16 equivalent, so they use `AdaptiveColor`.
@@ -249,6 +249,7 @@ colors in components.
 | `esc` | Close the full help; else close the filter |
 | `q`, `ctrl+c` | Quit. With a newer release: `q` quits and updates, `Q` and `ctrl+c` quit |
 | `r` | Reload everything |
+| `C` | Switch the kubeconfig context, see [Context picker](#context-picker) |
 | `c` | Copy the name of the selection (`deployment/api`, a namespace's name, the context for the cluster) to the clipboard (OSC 52, works over SSH; in tmux `set -g set-clipboard on`). The footer confirms with `copied <name>` |
 | `/` | Open the filter, see [Filter](#filter) |
 | `!` | Toggle problems only, see [Problems only](#problems-only) |
@@ -300,13 +301,47 @@ the filter, stays until `!` is pressed again, and shows `problems only`
 (yellow) and `! show all` above the footer (inside the filter line:
 `problems only (!)`). With no problem the tree says `no problems`.
 
-### Popups (planned)
+### Context picker
 
-The context picker opens in the middle of the screen as in
-submarine's branch picker: a search line, a list, `↑↓ select · enter … ·
-esc cancel`; the screen behind is dimmed (`Backdrop`). Actions that can
-lose something ask on the line above the footer: `Delete pod
-shop/api-7b8d9f6c5-zp6qx?   y delete · n cancel`.
+`C` opens a popup in the middle of the screen, like submarine's branch
+picker (P16). The screen around it stays visible but dimmed: its colors are
+dropped and it is drawn in `Backdrop`, so the popup has the focus.
+
+```
+╭──────────────────────────────────────────────────────────────────────╮
+│ Switch context                                                       │
+│ / filter contexts                                                    │
+│ ──────────────────────────────────────────────────────────────────── │
+│ * kind-dev                                                  kind-dev │
+│   staging                                          staging-eu · shop │
+│   prod-eu                                           prod-eu-1 · shop │
+│ ↑↓ select · enter switch · esc cancel                                │
+╰──────────────────────────────────────────────────────────────────────╯
+```
+
+- The kubeconfig contexts in kubeconfig order; right-aligned and muted the
+  cluster and the context's namespace. The current context is bold with
+  `*` and selected when the popup opens.
+- Border `Border`, title in `Primary` bold, search prompt `Primary`, the
+  selected row on the `Selected` background.
+- Typing filters (every word must be in the name; the selection stays on
+  the same context while it matches). `↑↓` `pgup` `pgdn` and the wheel
+  move, `enter` or a click on a row switches, `esc` or a click outside
+  closes.
+- Width at most 72 columns, height as the list (at most 14 rows), so
+  filtering doesn't resize it. While reading: spinner and `reading
+  contexts…`; no match: `nothing matches`; error: red, inside the popup.
+- Switching: the footer says `switching to staging…` while the current
+  cluster stays on screen; then the new cluster's cluster level is shown,
+  or its context's namespace (F4), and `switched to staging`. If the new
+  context can't be reached, the current cluster stays and the footer says
+  why (`can't reach prod-eu: <error>`), longer than other messages.
+- The kubeconfig is never written: the switch is periscope's alone.
+
+### Questions (planned)
+
+Actions that can lose something ask on the line above the footer: `Delete
+pod shop/api-7b8d9f6c5-zp6qx?   y delete · n cancel`.
 
 ### Key reference
 
@@ -327,6 +362,7 @@ the full help.
 | `c` | Copy name | Resource | Palette, Help |
 | `!` | Problems only (toggle) | Tools | Bar, Help |
 | `/` | Filter | Tools | Bar, Help |
+| `C` | Context picker (popup) | Tools | Bar, Help |
 | `r` | Reload everything | Tools | Bar, Help |
 | `?` | Full help: keys, legend, close | Global | Bar, Help |
 | `esc` | Close the full help (and the filter) | Global | Help |
@@ -343,7 +379,6 @@ Planned, not implemented (keys reserved):
 | `s` | Scale a workload | Resource |
 | `t` | Restart a rollout | Resource |
 | `x` | Delete a pod (asks first) | Resource |
-| `C` | Context picker (popup) | Tools |
 
 Not `l` for logs (k9s' key): `l` moves right, as in submarine. Not `R` for
 restart: it sits next to `r` (reload), the reason submarine's restore is `x`

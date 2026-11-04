@@ -237,3 +237,22 @@ problems" is answered by `!` there and then by opening the namespace. A
 search across namespaces at once is gone; it can come back as its own
 feature if it is missed. Selection and expansion are kept per namespace for
 the session, nothing is saved between runs.
+
+## P16: Switching the context in periscope only
+
+**Context.** Users work with several clusters. kubectx switches by writing
+`current-context` into the kubeconfig, which changes every shell, and a
+context that needs a fresh login or points at a cluster that is down
+leaves the user with nothing on screen.
+**Decision.** `C` opens a picker like submarine's branch picker (a popup
+with a search line over the dimmed screen) with the kubeconfig contexts.
+Enter switches periscope only; the kubeconfig is never written (N8). The
+current cluster stays on screen until the new context's tree has loaded;
+if it fails, the cluster stays and the footer says why, longer than other
+messages. The new cluster starts like at startup: in the context's
+namespace if it sets one, else at the cluster level; `--namespace` applies
+to the first context only. Through the optional `resource.Switcher`, so a
+provider without contexts simply doesn't offer it.
+**Consequences.** The only picker; namespaces are opened from the cluster
+level (P15). Answers from the old provider are dropped by identity. Nothing
+about the switch is remembered between runs.

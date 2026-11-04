@@ -155,8 +155,8 @@ See [P14](decisions.md#p14-resources-beyond-workloads) and the
   and the number of namespaces and pods. If it is too narrow it is cut at
   the right end, so the most severe counts stay.
 - **F31** The footer shows key hints; `?` steps through the full help and
-  the legend. It shows short messages for a moment (e.g. `copied
-  deployment/api`).
+  the legend. It shows short messages for a moment, on one line (e.g.
+  `copied deployment/api`); errors stay longer.
 
 ### Navigation
 
@@ -182,11 +182,17 @@ See [P14](decisions.md#p14-resources-beyond-workloads) and the
   `problems only`, so a short list is not mistaken for a healthy cluster.
 - **F56** `c` copies the name of the selection as kubectl writes it
   (`deployment/api`; a namespace's name; the context for the cluster).
+- **F57** `C` opens the context picker: the kubeconfig contexts, filtered
+  by typing; enter switches periscope to the selected one. The current
+  cluster stays until the new one has loaded, so a context that can't be
+  reached (a login that needs a browser, a cluster that is down) only costs
+  a message. The kubeconfig is never written. See
+  [Context picker](ux-guide.md#context-picker).
 
 ### Planned actions
 
 See [ux-guide.md](ux-guide.md#key-reference) for their keys: logs, describe,
-the context picker, restart a rollout, scale, delete a pod.
+restart a rollout, scale, delete a pod.
 
 ## Usage
 

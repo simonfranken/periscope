@@ -12,6 +12,7 @@ type keyMap struct {
 	CollapseBelow, ExpandBelow    key.Binding
 	Home, End, PageUp, PageDown   key.Binding
 	Reload, Filter, Issues        key.Binding
+	Context                       key.Binding
 	Copy                          key.Binding
 	Help, Quit, QuitUpdate        key.Binding
 
@@ -36,6 +37,7 @@ func defaultKeys() keyMap {
 		Reload:        key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "reload")),
 		Filter:        key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
 		Issues:        key.NewBinding(key.WithKeys("!"), key.WithHelp("!", "problems only")),
+		Context:       key.NewBinding(key.WithKeys("C"), key.WithHelp("C", "context")),
 		Copy:          key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "copy name")),
 		Help:          key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 		Quit:          key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
@@ -67,7 +69,9 @@ func (k keyMap) Navigation() []key.Binding {
 
 // Tools returns the bindings that act on the whole list, most useful first,
 // since the footer drops them from the end.
-func (k keyMap) Tools() []key.Binding { return []key.Binding{k.Issues, k.Filter, k.Reload} }
+func (k keyMap) Tools() []key.Binding {
+	return []key.Binding{k.Issues, k.Filter, k.Context, k.Reload}
+}
 
 // Resource returns the bindings that act on the selected object. They are
 // shown in the detail pane, or in the footer if the pane can't show them.
@@ -101,7 +105,7 @@ func (k keyMap) HelpGroups() []footer.Group {
 		{Title: "Move", Keys: []key.Binding{k.Up, k.Down, k.Left, k.Right, k.Enter, k.Toggle, k.CollapseBelow, k.ExpandBelow, k.Back}},
 		{Title: "Jump", Keys: []key.Binding{k.Home, k.End, k.PageUp, k.PageDown}},
 		{Title: "Selected", Keys: k.Resource()},
-		{Title: "Everything", Keys: []key.Binding{k.Issues, k.Filter, k.Reload}},
+		{Title: "Everything", Keys: []key.Binding{k.Issues, k.Filter, k.Context, k.Reload}},
 		{Title: "App", Keys: append([]key.Binding{help, esc, k.Quit}, k.fullUpdate()...)},
 	}
 }

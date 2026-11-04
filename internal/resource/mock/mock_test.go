@@ -42,3 +42,36 @@ func TestMockShowsEveryIssue(t *testing.T) {
 		t.Error("no status for the cluster")
 	}
 }
+
+func TestContextsAndSwitch(t *testing.T) {
+	p := New()
+	cs, err := p.Contexts(context.Background())
+	if err != nil || len(cs) != 3 || !cs[0].Current || cs[1].Current {
+		t.Fatalf("contexts = %+v, %v; want kind-dev current", cs, err)
+	}
+	s, err := p.Switch("staging")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := s.Tree(context.Background())
+	if err != nil || c.Context != "staging" || c.Namespace != "shop" {
+		t.Fatalf("staging tree = %+v, %v", c, err)
+	}
+	cs, _ = s.(resource.Switcher).Contexts(context.Background())
+	if !cs[1].Current || cs[0].Current {
+		t.Errorf("after the switch staging should be current: %+v", cs)
+	}
+	if _, err := p.Switch("nope"); err == nil {
+		t.Error("an unknown context should fail")
+	}
+}
+
+func TestUnreachableContextFails(t *testing.T) {
+	s, err := New().Switch("prod-eu")
+	if err != nil {
+		t.Fatal(err) // switching itself doesn't talk to the cluster
+	}
+	if _, err := s.Tree(context.Background()); err == nil {
+		t.Error("prod-eu's tree should fail like a login that needs a browser")
+	}
+}

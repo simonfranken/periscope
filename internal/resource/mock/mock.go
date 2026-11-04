@@ -12,23 +12,68 @@ import (
 	"periscope/internal/resource"
 )
 
-// Provider serves the fixture cluster. Every Tree builds it anew, with
-// times relative to now.
+// Provider serves the fixture cluster of one of its contexts. Every Tree
+// builds it anew, with times relative to now.
 type Provider struct {
+	context  string
 	mu       sync.Mutex
 	statuses map[string]*resource.Status
 }
 
-// New returns the mock provider.
-func New() *Provider {
-	p := &Provider{}
-	p.Tree(context.Background())
+// Contexts of the mock kubeconfig: kind-dev, the fixture showing every
+// word; staging, a small healthy cluster whose context sets a namespace;
+// prod-eu, whose login fails like an exec plugin that needs a browser.
+var contexts = []resource.Context{
+	{Name: "kind-dev", Cluster: "kind-dev", Current: true},
+	{Name: "staging", Cluster: "staging-eu", Namespace: "shop"},
+	{Name: "prod-eu", Cluster: "prod-eu-1", Namespace: "shop"},
+}
+
+// New returns the mock provider for the current context, kind-dev.
+func New() *Provider { return newFor("kind-dev") }
+
+func newFor(name string) *Provider {
+	p := &Provider{context: name}
+	if name != "prod-eu" {
+		p.Tree(context.Background())
+	}
 	return p
+}
+
+func (p *Provider) Contexts(ctx context.Context) ([]resource.Context, error) {
+	out := make([]resource.Context, len(contexts))
+	for i, c := range contexts {
+		c.Current = c.Name == p.context
+		out[i] = c
+	}
+	return out, nil
+}
+
+func (p *Provider) Switch(name string) (resource.Provider, error) {
+	for _, c := range contexts {
+		if c.Name == name {
+			return newFor(name), nil
+		}
+	}
+	return nil, fmt.Errorf("no context %q in the kubeconfig", name)
 }
 
 func (p *Provider) Tree(ctx context.Context) (*resource.Cluster, error) {
 	statuses := map[string]*resource.Status{}
-	c := fixture(statuses, time.Now())
+	var c *resource.Cluster
+	switch p.context {
+	case "staging":
+		c = staging(statuses, time.Now())
+	case "prod-eu":
+		select { // the plugin takes a moment before it gives up
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(time.Second):
+		}
+		return nil, fmt.Errorf("getting credentials: exec: kubelogin: interactive login needs a browser, run `kubelogin` in a terminal first")
+	default:
+		c = fixture(statuses, time.Now())
+	}
 	p.mu.Lock()
 	p.statuses = statuses
 	p.mu.Unlock()
@@ -255,5 +300,31 @@ func fixture(statuses map[string]*resource.Status, now time.Time) *resource.Clus
 		Version: "v1.34.1",
 		Root:    root,
 		Objects: objects,
+	}
+}
+
+// staging is a small cluster without problems; its context sets the
+// namespace shop, so periscope starts inside it.
+func staging(statuses map[string]*resource.Status, now time.Time) *resource.Cluster {
+	b := builder{statuses: statuses, now: now}
+	ns := func() *resource.Status { return &resource.Status{Created: now.Add(-200 * 24 * time.Hour)} }
+	objects := resource.Arrange([]*resource.Object{
+		b.namespace("default", ns()),
+		b.namespace("shop", ns(),
+			b.workload(resource.KindDeployment, "api", &resource.Status{Desired: 2, Ready: 2, Updated: 2},
+				b.pod("api-6c9d8b7f5-4kq2m", running("node-a", "registry.example.com/shop/api:1.7.4")),
+				b.pod("api-6c9d8b7f5-t8w3x", running("node-b", "registry.example.com/shop/api:1.7.4"))),
+			b.workload(resource.KindDeployment, "web", &resource.Status{Desired: 1, Ready: 1, Updated: 1},
+				b.pod("web-5b8c7d6f4-p2r9z", running("node-a", "registry.example.com/shop/web:4.2.1"))),
+		),
+	})
+	statuses[""] = &resource.Status{Created: now.Add(-300 * 24 * time.Hour)}
+	return &resource.Cluster{
+		Context:   "staging",
+		Server:    "https://staging.example.com:6443",
+		Version:   "v1.33.4",
+		Namespace: "shop",
+		Root:      &resource.Object{Kind: resource.KindCluster, Name: "staging"},
+		Objects:   objects,
 	}
 }
