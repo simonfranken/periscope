@@ -76,7 +76,7 @@ func TestArrangePutsClusterScopedSectionAfterNamespaces(t *testing.T) {
 		{Kind: KindCustom, Type: issuer, Name: "letsencrypt"},
 		{Kind: KindNamespace, Name: "shop"},
 	})
-	if len(top) != 2 || top[0].Kind != KindNamespace || top[1].Kind != KindSection || top[1].Path != "custom resources" || top[1].Parent != nil {
+	if len(top) != 2 || top[0].Kind != KindNamespace || top[1].Kind != KindSection || top[1].Path != "custom resources" || top[1].Group != ClusterGroup || top[1].Parent != nil {
 		t.Fatalf("top = %v", names(top))
 	}
 	if g := top[1].Children[0].Group; g != "clusterissuers" {

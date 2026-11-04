@@ -58,7 +58,9 @@ type Provider interface {
   linked and `Group` set, passed through `resource.Arrange` (display order;
   custom resources moved into `custom resources` sections). `Cluster.Objects`
   is the top level: namespaces, then the section of cluster-scoped custom
-  resources. `Status` fields are nil, except the sections' (empty).
+  resources. `Cluster.Namespace` is the kubeconfig context's namespace, where
+  the UI starts (F4); "" if the context sets none. `Status` fields are nil,
+  except the sections' (empty).
 - `Status` is called once per object except sections, concurrently. It must be safe to call
   concurrently and must respect `ctx`.
 - `Object.Path` is the unique ID (see

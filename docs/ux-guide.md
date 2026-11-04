@@ -19,25 +19,35 @@ is the reference for periscope.
 
 ## Layout
 
+Two levels (P15). The **cluster level** lists the namespaces and, under
+`cluster`, the cluster-scoped sections; nothing expands in place there:
+
 ```
- kind-dev  v1.34.1                              7 errors · 9 warnings · 3 notes · 7 namespaces · 22 pods
- ▸ default [1]                     healthy                 90d  │ shop · pod
- ▸ payments [2]                    ·3 ·4                   90d  │ api-7b8d9f6c5-zp6qx                 age 25m
- ▾ shop                            healthy                 90d  │
-   deployments                                                  │ crashloop   container keeps crashing (app)
-     ▾ api                         degraded +1        2/3  30d  │ restarting  restarted in the last hour (app)
-         api-5f9c7d8b6-9vn2c       healthy            1/1   3d  │
-         api-7b8d9f6c5-zp6qx       crashloop +1       0/1  25m  │ Phase       Running
-   statefulsets                                                 │ Node        node-2
-     ▾ postgres                    healthy            1/1  30d  │
-         postgres-0                oom killed         1/1   3d  │ Containers
-   legacy-feature                  terminating            400d  │ app         CrashLoopBackOff · 14 restarts, last 40s ago (Error)
-                                                                │             registry.example.com/shop/api:1.8.0
-                                                                │
-                                                                │ Warnings
-                                                                │ 40s  BackOff ×61 Back-off restarting failed container app
+ kind-dev  v1.34.1                    7 errors · 10 warnings · 3 notes · 8 namespaces · 25 pods
+ ▸ argocd [2]               healthy                 90d  │ cluster
+ ▸ payments [2]             ·3 ·4                   90d  │ kind-dev                       age 120d
+ ▸ shop [6]                 ·4 ·3 ·2                90d  │
+   legacy-feature           terminating            400d  │ Server      https://127.0.0.1:6443
+ cluster                                                 │ Namespaces  8 · 7 errors, 10 warnings, 3 notes
+   ▸ custom resources [1]                                │
+ ↑↓/jk move • →/enter open • ! problems only • / filter • r reload             ? help • q quit
+```
+
+`→` / `enter` on a namespace (or section) **opens** it: the tree shows its
+contents without the namespace row, and the header becomes a breadcrumb:
+
+```
+ kind-dev › shop  v1.34.1                              4 errors · 3 warnings · 2 notes · 7 pods
+ deployments                                                    │ shop · pod
+   ▾ api                         degraded +1        2/3  30d    │ api-7b8d9f6c5-zp6qx                 age 25m
+       api-5f9c7d8b6-9vn2c       healthy            1/1   3d    │
+       api-7b8d9f6c5-zp6qx       crashloop +1       0/1  25m    │ crashloop   container keeps crashing (app)
+ statefulsets                                                   │ restarting  restarted in the last hour (app)
+   ▸ postgres [1]                ·1                 1/1  30d    │
+ ▸ custom resources [4]          ·1                             │ Phase       Running
+                                                                │ Node        node-2
                                                                 │ c copy name
- ↑↓/jk move • ←→/hl collapse/expand • ⇧←→/HL all below • space toggle • ! problems only • / filter • r reload   ? help • q quit
+ ↑↓/jk move • ←→/hl collapse/expand • ⇧←→/HL all below • space toggle • ⌫ back • ! problems only • / filter • r reload
 ```
 
 | Area | Height / width |
@@ -155,13 +165,21 @@ nothing.
 
 ### Header
 
-The header is the cluster's row: selected on startup and drawn with the
-selected background (bold) while selected.
+The header is the row of what the tree shows: the cluster at the cluster
+level, the namespace (or section) inside one. It is drawn with the selected
+background (bold) while selected, and selected on startup at the cluster
+level.
 
 `context  version  [state]   n errors · n warnings · n notes · n loading · n namespaces · n pods`
 
-The cluster's own state word is shown only if it says something (an issue,
-loading, `error`). The counts form one group at the right edge. Issues are
+Inside a namespace it is a breadcrumb, and the counts are the namespace's:
+
+`context › shop  version  [state]   n errors · n warnings · n notes · n loading · n pods`
+
+The breadcrumb shows where the user is and the way back: a click on the
+context's name goes back to the cluster level, like `⌫`. The own state
+word (the cluster's or the namespace's) is shown only if it says something
+(an issue, loading, `error`; e.g. `terminating`). The counts form one group at the right edge. Issues are
 counted **per level**, as in the tree's hidden counts (`·1 ·2 ·3`): danger
 (including objects that failed to load), warn and info, each in its level
 color; zero counts are omitted. A real cluster has many kinds of issues at
@@ -216,12 +234,13 @@ colors in components.
 
 | Key | Behavior |
 |---|---|
-| `↑` / `k`, `↓` / `j` | Previous / next object; group headers are skipped. `↑` from the first namespace selects the header (cluster) |
-| `space` | Toggle expand/collapse of the selection |
-| `→` / `l` | Header selected: first namespace. Collapsed with children: expand and select the first child. Expanded: select the first child. Leaf: nothing |
-| `←` / `h` | Expanded: collapse it (stays selected). Otherwise: collapse the parent and select it. Top level: select the header |
-| `L` / `shift+→` / `ctrl+→` | Expand the selection and everything below it; the selection and its siblings stay. On the header: everything |
-| `H` / `shift+←` / `ctrl+←` | Collapse the selection and everything below it (resets remembered expansion there); siblings stay. With nothing to collapse (a leaf, a collapsed object) it collapses the parent and selects it, so repeating it climbs up. On the header: everything |
+| `↑` / `k`, `↓` / `j` | Previous / next object; group headers are skipped. `↑` from the first row selects the header |
+| `space` | Toggle expand/collapse of the selection; at the cluster level: open it |
+| `→` / `l`, `enter` | Header selected: first row. At the cluster level: open the namespace or section (empty ones can't be opened). Inside: collapsed with children: expand and select the first child; expanded: select the first child; leaf: nothing |
+| `←` / `h` | Expanded: collapse it (stays selected). Otherwise: collapse the parent and select it. A collapsed top-level row or the header inside a namespace: back to the cluster level. At the cluster level: select the header |
+| `⌫` (backspace) | Back to the cluster level from anywhere inside, with the namespace selected |
+| `L` / `shift+→` / `ctrl+→` | Expand the selection and everything below it; the selection and its siblings stay. On the header inside a namespace: all of it. At the cluster level: open the selection with everything expanded |
+| `H` / `shift+←` / `ctrl+←` | Collapse the selection and everything below it (resets remembered expansion there); siblings stay. With nothing to collapse (a leaf, a collapsed object) it collapses the parent and selects it, so repeating it climbs up: to the header (which collapses the namespace), then back to the cluster level. On the cluster: forget all expansion |
 | `home` / `g`, `end` / `G` | Header / last object |
 | `pgup`, `pgdn` | Move by one screen |
 | `?` | Full help: keys, then the legend, then closed |
@@ -237,12 +256,27 @@ grouped by kind). Collapsing an ancestor of the selection moves the
 selection to that ancestor. The view scrolls so the selection is always
 visible.
 
+**Levels.** Opening a namespace selects what was selected when it was last
+left (else its first row), and its expansion is kept, for the session.
+Going back selects the namespace. Changing the level closes the filter (it
+applies to one level); problems only stays on. If a reload no longer has
+the namespace that is open, the cluster level is shown with `<name> is
+gone`.
+
+**Start.** `--namespace NAME` (`-n`) starts inside `NAME`; without it,
+periscope starts inside the kubeconfig context's namespace if the context
+sets one, else at the cluster level. An unknown name shows `no namespace
+NAME` and the cluster level. The flow is the same for every user: someone
+who may list only their own namespace sees a cluster level with that one
+namespace.
+
 ### Filter
 
-`/` shows a text input above the footer (`/ term`). While it is open the
-tree shows only the objects whose path (namespace, kind and name, e.g.
-`shop/deployment/api`) contains the term, ignoring case; their ancestors
-stay as context and are shown expanded. Group headers without a match
+`/` shows a text input above the footer (`/ term`). It filters only what
+the current level shows. At the cluster level: the namespaces and sections
+whose name contains the term. Inside a namespace: the objects whose path
+below the namespace (kind and name, e.g. `deployment/api`) contains the
+term, ignoring case; their ancestors stay as context and are shown expanded. Group headers without a match
 vanish. If nothing matches the tree says `nothing matches`.
 
 - **Selection.** If the selection is filtered out, the next visible object
@@ -252,20 +286,21 @@ vanish. If nothing matches the tree says `nothing matches`.
   hands the keys back to the tree (the filter stays); `/` edits again.
 - **`esc`** closes the input and removes the filter. The selection stays;
   its ancestors are expanded so it is still visible.
-- The cluster is never filtered out; the header counts are not filtered.
+- The header is never filtered out; its counts are not filtered.
 
 ### Problems only
 
 `!` reduces the tree to what needs attention, with the filter's rules and
-"match" meaning *has an issue* (`Status.Issues()`). Loading and failed
-objects count as problems, since their state is unknown. It combines with
+"match" meaning *has an issue* (`Status.Issues()`); at the cluster level,
+a namespace or section with an issue of its own or below it. Loading and
+failed objects count as problems, since their state is unknown. It combines with
 the filter, stays until `!` is pressed again, and shows `problems only`
 (yellow) and `! show all` above the footer (inside the filter line:
 `problems only (!)`). With no problem the tree says `no problems`.
 
 ### Popups (planned)
 
-Pickers (context, namespace) open in the middle of the screen as in
+The context picker opens in the middle of the screen as in
 submarine's branch picker: a search line, a list, `↑↓ select · enter … ·
 esc cancel`; the screen behind is dimmed (`Backdrop`). Actions that can
 lose something ask on the line above the footer: `Delete pod
@@ -280,7 +315,9 @@ the full help.
 | Key | Action | Group | Shown in |
 |---|---|---|---|
 | `↑` / `k`, `↓` / `j` | Move selection | Navigation | Bar, Help |
-| `←` / `h`, `→` / `l` | Fold / unfold, parent / first child | Navigation | Bar, Help |
+| `←` / `h`, `→` / `l` | Fold / unfold, parent / first child; back / open a namespace | Navigation | Bar, Help |
+| `enter` | Open a namespace; expand | Navigation | Bar (cluster level), Help |
+| `⌫` | Back to the cluster level | Navigation | Bar (inside a namespace), Help |
 | `H` / `⇧←`, `L` / `⇧→` | Collapse / expand all below | Navigation | Bar, Help |
 | `space` | Toggle expand/collapse | Navigation | Bar, Help |
 | `home` / `g`, `end` / `G` | Header / last object | Navigation | Help |
@@ -304,7 +341,6 @@ Planned, not implemented (keys reserved):
 | `s` | Scale a workload | Resource |
 | `t` | Restart a rollout | Resource |
 | `x` | Delete a pod (asks first) | Resource |
-| `n` | Namespace picker (popup) | Tools |
 | `C` | Context picker (popup) | Tools |
 
 Not `l` for logs (k9s' key): `l` moves right, as in submarine. Not `R` for
@@ -313,12 +349,13 @@ restart: it sits next to `r` (reload), the reason submarine's restore is `x`
 
 ### Mouse
 
-- Click a row: select it. Click the header: select the cluster.
-- Click `▸` / `▾`: select and toggle.
+- Click a row: select it. Click the header: select what it stands for.
+- Click `▸` / `▾`: select and toggle (at the cluster level: open).
+- Click the context's name in the breadcrumb: back to the cluster level.
 - Scroll wheel: move the selection.
 
 ## Accessibility and terminals
 
-- `PERISCOPE_ASCII=1`: ASCII symbols (`> v . *`) instead of Unicode.
+- `PERISCOPE_ASCII=1`: ASCII symbols (`> v . * >`) instead of Unicode.
 - Many setups capture `ctrl+←/→`, so expand/collapse all below also work as
   `shift+→/←` and as `L` / `H`.

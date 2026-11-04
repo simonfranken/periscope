@@ -6,9 +6,11 @@ import (
 	"periscope/internal/resource"
 )
 
-// SetFilter shows only the objects whose path contains term (ignoring
-// case), plus their ancestors, which are shown expanded. An empty term
-// removes the filter. It combines with SetProblemsOnly.
+// SetFilter shows only the objects of the current level whose path contains
+// term (ignoring case), plus their ancestors, which are shown expanded. At
+// the cluster level it matches the names of the listed objects; inside a
+// namespace, the path below it. An empty term removes the filter. It
+// combines with SetProblemsOnly.
 //
 // If the selected object is filtered out, the next visible one is
 // selected (the previous one if there is none after it, none if nothing
@@ -25,7 +27,8 @@ func (m *Model) SetFilter(term string) {
 }
 
 // SetProblemsOnly shows only the objects with issues, plus their
-// ancestors, which are shown expanded. An object whose status is loading or
+// ancestors, which are shown expanded; at the cluster level, the objects
+// with issues of their own or below. An object whose status is loading or
 // failed to load counts as a problem, since its state is unknown. The
 // selection behaves as with SetFilter.
 func (m *Model) SetProblemsOnly(on bool) {
@@ -82,7 +85,7 @@ func parentOf(s *resource.Object) *resource.Object {
 // visible any more, the closest visible one after it in display order
 // becomes the selection, else the closest one before it.
 func (m *Model) reselect(old *resource.Object) {
-	if old != nil && old == m.root { // the cluster is never filtered out
+	if old != nil && old == m.head() { // the header is never filtered out
 		m.cursor = old
 		return
 	}
@@ -102,13 +105,19 @@ func (m *Model) reselect(old *resource.Object) {
 	}
 	m.cursor = first
 	if first == nil {
-		m.cursor = m.root // nothing matches: the cluster remains
+		m.cursor = m.head() // nothing matches: the header remains
 	}
 	if old == nil || first == nil {
 		return
 	}
 	var all []row
-	m.appendAll(&all, m.roots, 0)
+	if m.atClusterLevel() {
+		for _, s := range m.roots {
+			all = append(all, row{kind: rowNode, node: s})
+		}
+	} else {
+		m.appendAll(&all, m.scope.Children, 0)
+	}
 	i := 0
 	for ; i < len(all); i++ {
 		if all[i].node == old {
@@ -143,6 +152,9 @@ func (m *Model) appendAll(out *[]row, mods []*resource.Object, depth int) {
 // isExpanded reports whether the children of s are shown. While narrowed,
 // that is the case if a match is below s, whatever the user expanded.
 func (m *Model) isExpanded(s *resource.Object) bool {
+	if m.atClusterLevel() {
+		return false // a list: its objects are entered
+	}
 	if !m.narrowed() {
 		return m.expanded[s.Path]
 	}
@@ -169,8 +181,15 @@ func (m *Model) filtered(mods []*resource.Object) []*resource.Object {
 }
 
 // shown reports whether s matches the filter or has a descendant that does.
+// At the cluster level only the listed object itself counts: its name, and
+// for problems only the issues of its own or below.
 func (m *Model) shown(s *resource.Object) bool {
-	if strings.Contains(strings.ToLower(s.Path), m.filter) && (!m.problemsOnly || hasProblem(s)) {
+	if m.atClusterLevel() {
+		return strings.Contains(strings.ToLower(s.Name), m.filter) &&
+			(!m.problemsOnly || hasProblem(s) || s.HiddenIssues().Total() > 0 || loadingBelow(s))
+	}
+	rel := strings.TrimPrefix(s.Path, m.scope.Path+"/") // "shop" would match all of shop
+	if strings.Contains(strings.ToLower(rel), m.filter) && (!m.problemsOnly || hasProblem(s)) {
 		return true
 	}
 	for _, c := range s.Children {
@@ -185,4 +204,12 @@ func (m *Model) shown(s *resource.Object) bool {
 // failed to load, like HiddenIn counts it).
 func hasProblem(s *resource.Object) bool {
 	return s.Status == nil || len(s.Status.Issues()) > 0
+}
+
+// loadingBelow reports whether a descendant of s is still loading, so its
+// state is not known yet.
+func loadingBelow(s *resource.Object) bool {
+	loading := false
+	resource.Walk(s.Children, func(c *resource.Object) { loading = loading || c.Status == nil })
+	return loading
 }

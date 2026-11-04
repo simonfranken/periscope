@@ -60,7 +60,10 @@ type Cluster struct {
 	Context string // kubeconfig context
 	Server  string // API server URL
 	Version string // server version, "" if unknown
-	Root    *Object
+	// Namespace is the kubeconfig context's namespace, where the tree
+	// starts; "" if the context sets none, which starts at the cluster level.
+	Namespace string
+	Root      *Object
 	// Objects is the top level: the namespaces, then cluster-scoped
 	// objects (custom resources), in the order of Arrange.
 	Objects []*Object

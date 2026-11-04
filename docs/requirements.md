@@ -33,15 +33,26 @@ broken.
 
 ### Tree
 
-- **F1** Show the namespaces of the cluster; below each its workloads
-  (Deployments, StatefulSets, DaemonSets, Jobs, CronJobs), below each
-  workload its pods.
+- **F1** Two levels ([P15](decisions.md#p15-a-cluster-level-and-namespaces-you-open)).
+  The **cluster level** lists the namespaces of the cluster and, under a
+  `cluster` header, the cluster-scoped sections (F67); nothing expands in
+  place there. Opening a namespace (`→`, `enter`) shows its contents
+  without the namespace row: its workloads (Deployments, StatefulSets,
+  DaemonSets, Jobs, CronJobs), below each workload its pods, then its
+  `custom resources` section. `←` from the top of a namespace, or `⌫` from
+  anywhere in it, goes back.
 - **F2** Group the workloads of a namespace by kind under a non-selectable
   header (`deployments`, `statefulsets`, …), in that order.
 - **F3** *(planned)* Pods without an owning workload are listed under a
   `pods` header of their namespace.
-- **F4** On startup only the top level is shown, collapsed: the namespaces,
-  then the section of cluster-scoped custom resources (F67).
+- **F4** On startup the cluster level is shown, or the namespace given by
+  `--namespace`, else the one the kubeconfig context sets. Inside a
+  namespace everything starts collapsed. The flow is the same for every
+  user, also one who may list only their own namespace.
+- **F8** Inside a namespace the header is a breadcrumb (`kind-dev › shop`),
+  so the user sees where they are, and the key bar shows `⌫ back`. Its
+  selection and expansion are kept when the user goes back and opens it
+  again (for the session).
 - **F5** A collapsed object shows the number of its **direct** children,
   e.g. `[2]`.
 - **F6** A collapsed object shows the number of issues **hidden** in all
@@ -151,18 +162,23 @@ See [P14](decisions.md#p14-resources-beyond-workloads) and the
 
 - **F40** Keyboard navigation as specified in
   [ux-guide.md](ux-guide.md#navigation).
-- **F41** Mouse: click a row to select it, click `▸`/`▾` to toggle, scroll
-  wheel moves the selection.
+- **F41** Mouse: click a row to select it, click `▸`/`▾` to toggle (at the
+  cluster level: open), click the context in the breadcrumb to go back,
+  scroll wheel moves the selection.
 
 ### Tools
 
 - **F53** `r` reloads everything. *(planned)* With a watch, the view follows
   the cluster live, and `r` is only needed after an error.
-- **F54** `/` filters the tree by path (namespace, kind and name;
-  case-insensitive substring). See [Filter](ux-guide.md#filter).
+- **F54** `/` filters what the current level shows (case-insensitive
+  substring): at the cluster level the names of namespaces and sections,
+  inside a namespace the path below it (kind and name). Changing the level
+  closes the filter. See [Filter](ux-guide.md#filter).
 - **F55** `!` toggles "problems only": the tree shows only objects with an
   issue or an unknown state (loading, `error`), plus their ancestors,
-  expanded. It combines with the filter. A line above the footer says
+  expanded; at the cluster level the namespaces and sections with an issue
+  of their own or below. It combines with the filter and stays on across
+  levels. A line above the footer says
   `problems only`, so a short list is not mistaken for a healthy cluster.
 - **F56** `c` copies the name of the selection as kubectl writes it
   (`deployment/api`; a namespace's name; the context for the cluster).
@@ -170,18 +186,19 @@ See [P14](decisions.md#p14-resources-beyond-workloads) and the
 ### Planned actions
 
 See [ux-guide.md](ux-guide.md#key-reference) for their keys: logs, describe,
-context and namespace pickers, restart a rollout, scale, delete a pod.
+the context picker, restart a rollout, scale, delete a pod.
 
 ## Usage
 
 ```sh
-periscope --mock    # built-in mock cluster
+periscope --mock [--namespace NAME]   # built-in mock cluster; -n NAME for short
 periscope update [--check] [--force]
 periscope version
 ```
 
 *(planned)* `periscope [--context NAME] [--namespace NAME]` reads the
-cluster of the current (or given) kubeconfig context.
+cluster of the current (or given) kubeconfig context. `--namespace` starts
+inside that namespace (F4).
 
 - **F58** On every start the tool looks for a newer release in the
   background (never blocking, silent on failure; off for dev builds,

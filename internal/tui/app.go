@@ -57,6 +57,15 @@ type Model struct {
 
 	width, height int
 	showDetail    bool
+
+	namespace string // --namespace: where to start; "" for the context's namespace
+	level     string // the path of the tree's scope, "" at the cluster level
+}
+
+// WithNamespace starts inside the namespace name instead of the kubeconfig
+// context's namespace (or the cluster level).
+func WithNamespace(name string) Option {
+	return func(m *Model) { m.namespace = name }
 }
 
 // Option configures New.
@@ -191,10 +200,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.MouseMsg:
 		m.tree.Update(msg)
+		m.syncLevel()
 		return m, nil
 
 	case tea.KeyMsg:
-		return m.handleKey(msg)
+		next, cmd := m.handleKey(msg)
+		mm := next.(Model)
+		mm.syncLevel()
+		return mm, cmd
 	}
 
 	m.footer.Update(msg)
@@ -217,6 +230,10 @@ func (m Model) treeLoaded(msg treeLoadedMsg) (tea.Model, tea.Cmd) {
 	}
 
 	old := m.byPath
+	var gone string // the namespace that was shown and has vanished
+	if s := m.tree.Scope(); s != nil {
+		gone = s.Name
+	}
 	m.cluster = msg.cluster
 	m.byPath = map[string]*resource.Object{}
 	var cmds []tea.Cmd
@@ -237,9 +254,22 @@ func (m Model) treeLoaded(msg treeLoadedMsg) (tea.Model, tea.Cmd) {
 	m.tree.SetRoot(m.cluster.Root)
 	if initial {
 		m.tree.SetRoots(m.cluster.Objects)
+		// start inside --namespace, else the context's namespace
+		switch {
+		case m.namespace != "":
+			if !m.tree.EnterPath(m.namespace) {
+				cmds = append(cmds, m.footer.Flash("no namespace "+m.namespace))
+			}
+		case m.cluster.Namespace != "":
+			m.tree.EnterPath(m.cluster.Namespace)
+		}
 	} else {
 		m.tree.ReplaceRoots(m.cluster.Objects)
+		if gone != "" && m.tree.Scope() == nil {
+			cmds = append(cmds, m.footer.Flash(gone+" is gone"))
+		}
 	}
+	m.syncLevel()
 	cmds = append(cmds, m.tick())
 	return m, tea.Batch(cmds...)
 }
@@ -273,8 +303,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.tree.Down()
 	case key.Matches(msg, k.Left):
 		m.tree.Left()
-	case key.Matches(msg, k.Right):
+	case key.Matches(msg, k.Right), key.Matches(msg, k.Enter):
 		m.tree.Right()
+	case key.Matches(msg, k.Back):
+		m.tree.Back()
 	case key.Matches(msg, k.Toggle):
 		m.tree.Toggle()
 	case key.Matches(msg, k.CollapseBelow):
@@ -334,6 +366,26 @@ func (m Model) typeFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 	return m, nil
+}
+
+// syncLevel follows a change of the tree's level (entering or leaving a
+// namespace): the filter applies to one level, so it closes, and the key
+// bar shows the keys of the new level.
+func (m *Model) syncLevel() {
+	level := ""
+	if s := m.tree.Scope(); s != nil {
+		level = s.Path
+	}
+	if level == m.level {
+		return
+	}
+	m.level = level
+	if m.filtering {
+		m.closeFilter()
+	}
+	m.keys.inside = level != ""
+	m.footer.SetKeys(m.keys)
+	m.layout()
 }
 
 // closeFilter hides the filter line and removes the filter; the selection stays.
@@ -441,7 +493,7 @@ func (m Model) View() string {
 		body = lipgloss.JoinHorizontal(lipgloss.Top, body, pane)
 	}
 
-	head := header.View(m.theme, m.cluster, m.spinner.View(), m.width, m.tree.RootSelected())
+	head := header.View(m.theme, m.cluster, m.tree.Scope(), m.spinner.View(), m.width, m.tree.RootSelected(), m.tree.BackZone())
 	parts := []string{zone.Mark(m.tree.RootZone(), head), body}
 	switch {
 	case m.filtering:

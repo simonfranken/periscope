@@ -19,7 +19,21 @@ type row struct {
 // rows flattens the visible part of the tree.
 func (m *Model) rows() []row {
 	var out []row
-	m.appendRows(&out, m.roots, 0)
+	if m.atClusterLevel() {
+		// a list: the top-level objects are entered, never expanded here
+		for _, g := range groupByDir(m.filtered(m.roots)) {
+			d := 0
+			if g.dir != "" {
+				out = append(out, row{kind: rowDir, depth: 0, label: g.dir})
+				d = 1
+			}
+			for _, s := range g.mods {
+				out = append(out, row{kind: rowNode, depth: d, node: s})
+			}
+		}
+		return out
+	}
+	m.appendRows(&out, m.scope.Children, 0)
 	return out
 }
 

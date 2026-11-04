@@ -10,6 +10,10 @@ import (
 // of a namespace, or the cluster-scoped ones at the top level.
 const CustomSection = "custom resources"
 
+// ClusterGroup is the header of the top-level sections, below the
+// namespaces: what belongs to the cluster, not to a namespace.
+const ClusterGroup = "cluster"
+
 // Arrange puts the objects of a tree into the order the tree shows them, and
 // is what every provider calls on the result of Tree. It returns the new top
 // level.
@@ -70,8 +74,9 @@ func section(parent *Object, objs []*Object) []*Object {
 	if len(custom) == 0 {
 		return objs
 	}
-	s := &Object{Kind: KindSection, Name: CustomSection, Path: CustomSection, Parent: parent, Status: &Status{}}
+	s := &Object{Kind: KindSection, Name: CustomSection, Path: CustomSection, Group: ClusterGroup, Parent: parent, Status: &Status{}}
 	if parent != nil {
+		s.Group = ""
 		s.Namespace, s.Path = parent.Namespace, parent.Path+"/"+CustomSection
 		if parent.Kind == KindNamespace {
 			s.Namespace = parent.Name

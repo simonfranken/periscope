@@ -68,6 +68,8 @@ free, writes happen only on a user's action, and nothing prompts.
 
 ## P6: The cluster as a collapsed tree
 
+*Partly replaced by [P15](#p15-a-cluster-level-and-namespaces-you-open).*
+
 **Decision.** As submarine D7, D8 and D9. Namespaces are the top level,
 collapsed on start; workloads below them, grouped by kind under muted,
 non-selectable headers (`deployments`, …); pods below their workload.
@@ -152,6 +154,8 @@ cluster is; the breakdown is one key (`g`, home) away.
 
 ## P13: Expand and collapse all below the selection
 
+*Partly replaced by [P15](#p15-a-cluster-level-and-namespaces-you-open).*
+
 **Context.** submarine's `L` / `H` expand and collapse the whole tree
 (D8), which suits a repository with a handful of submodules. In a cluster
 with hundreds of namespaces and thousands of pods, expanding everything is
@@ -204,3 +208,32 @@ can't tell, so we don't say `healthy`. Conditions are read only for custom
 resources, so a pod's Ready condition never adds a second `not ready`.
 `Cluster.Namespaces` became `Cluster.Objects`, since the top level now
 holds cluster-scoped objects too.
+
+## P15: A cluster level, and namespaces you open
+
+**Context.** The tree had the namespaces as its top layer, expanded in
+place (P6). In a large cluster one namespace is what users work in, but its
+siblings stay on screen and everything is indented one level deeper. A
+namespace scope like `kubectl -n` would focus, but loses the overview
+("is anything broken anywhere?"), needs a picker and a mode, and users who
+may not list namespaces need a way in either way.
+**Decision.** Two levels, navigated with the keys the tree already has.
+The **cluster level** is a list: the namespaces (with `[n]` and `·k`),
+and under a `cluster` header the cluster-scoped sections. `→` / `enter` /
+space opens one: the tree shows its contents without the namespace row,
+the header becomes a breadcrumb (`kind-dev › shop`) with the namespace's
+counts, and the key bar shows `⌫ back`. `←` at the top of a namespace (or on
+its header), `⌫` anywhere, `H` climbing past the header, or a click on the
+context in the breadcrumb goes back, with the namespace selected. `/` and
+`!` apply to the current level only; changing the level closes the filter,
+problems only stays. Start: `--namespace`, else the kubeconfig context's
+namespace, else the cluster level. The flow is the same for everyone: a
+user who may list only their own namespace sees a cluster level with one
+entry. Replaces P6's "namespaces are the top level, expanded in place" and
+P13's "on the header, everything".
+**Consequences.** No namespace picker and no `n` key; the context picker
+(`C`) is the only one. The overview is the cluster level, so "where are the
+problems" is answered by `!` there and then by opening the namespace. A
+search across namespaces at once is gone; it can come back as its own
+feature if it is missed. Selection and expansion are kept per namespace for
+the session, nothing is saved between runs.

@@ -33,8 +33,11 @@ func main() {
 	}
 
 	useMock := flag.Bool("mock", false, "use built-in mock data instead of a cluster")
+	var namespace string
+	flag.StringVar(&namespace, "namespace", "", "start inside this namespace instead of the context's")
+	flag.StringVar(&namespace, "n", "", "short for --namespace")
 	flag.Usage = func() {
-		fmt.Fprintln(flag.CommandLine.Output(), "usage: periscope --mock\n       periscope update [--check] [--force]\n       periscope version")
+		fmt.Fprintln(flag.CommandLine.Output(), "usage: periscope --mock [--namespace NAME]\n       periscope update [--check] [--force]\n       periscope version")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -63,7 +66,7 @@ func main() {
 	zone.NewGlobal()
 	defer zone.Close()
 
-	var opts []tui.Option
+	opts := []tui.Option{tui.WithNamespace(namespace)}
 	if !*useMock && update.Release(version) && os.Getenv("PERISCOPE_NO_UPDATE_CHECK") == "" {
 		opts = append(opts, tui.WithUpdateCheck(latestRelease))
 	}

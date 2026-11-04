@@ -8,20 +8,25 @@ import (
 
 type keyMap struct {
 	Up, Down, Left, Right, Toggle key.Binding
+	Enter, Back                   key.Binding
 	CollapseBelow, ExpandBelow    key.Binding
 	Home, End, PageUp, PageDown   key.Binding
 	Reload, Filter, Issues        key.Binding
 	Copy                          key.Binding
 	Help, Quit, QuitUpdate        key.Binding
+
+	inside bool // the tree shows a namespace (or section), not the cluster level
 }
 
 func defaultKeys() keyMap {
 	return keyMap{
 		Up:            key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
 		Down:          key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
-		Left:          key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("←/h", "collapse, parent")),
-		Right:         key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("→/l", "expand, first child")),
+		Left:          key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("←/h", "collapse, parent, back")),
+		Right:         key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("→/l", "open, expand")),
 		Toggle:        key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "toggle")),
+		Enter:         key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open, expand")),
+		Back:          key.NewBinding(key.WithKeys("backspace"), key.WithHelp("⌫", "back to the cluster")),
 		CollapseBelow: key.NewBinding(key.WithKeys("shift+left", "ctrl+left", "H"), key.WithHelp("H/⇧←", "collapse all below")),
 		ExpandBelow:   key.NewBinding(key.WithKeys("shift+right", "ctrl+right", "L"), key.WithHelp("L/⇧→", "expand all below")),
 		Home:          key.NewBinding(key.WithKeys("home", "g"), key.WithHelp("home/g", "first")),
@@ -45,12 +50,19 @@ func (k *keyMap) SetUpdate(v string) {
 	k.QuitUpdate = key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit and update to "+v))
 }
 
-// Navigation returns the bindings that move the selection or fold the tree.
+// Navigation returns the bindings that move the selection or fold the tree:
+// at the cluster level how to open a namespace, inside one how to fold and
+// how to get back.
 func (k keyMap) Navigation() []key.Binding {
 	move := key.NewBinding(key.WithKeys("up"), key.WithHelp("↑↓/jk", "move"))
+	if !k.inside {
+		open := key.NewBinding(key.WithKeys("right"), key.WithHelp("→/enter", "open"))
+		return []key.Binding{move, open}
+	}
 	fold := key.NewBinding(key.WithKeys("left"), key.WithHelp("←→/hl", "collapse/expand"))
 	all := key.NewBinding(key.WithKeys("H"), key.WithHelp("⇧←→/HL", "all below"))
-	return []key.Binding{move, fold, all, k.Toggle}
+	back := key.NewBinding(key.WithKeys("backspace"), key.WithHelp("⌫", "back"))
+	return []key.Binding{move, fold, all, k.Toggle, back}
 }
 
 // Tools returns the bindings that act on the whole list, most useful first,
@@ -86,7 +98,7 @@ func (k keyMap) HelpGroups() []footer.Group {
 	help := key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "what words mean"))
 	esc := key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "close"))
 	return []footer.Group{
-		{Title: "Move", Keys: []key.Binding{k.Up, k.Down, k.Left, k.Right, k.Toggle, k.CollapseBelow, k.ExpandBelow}},
+		{Title: "Move", Keys: []key.Binding{k.Up, k.Down, k.Left, k.Right, k.Enter, k.Toggle, k.CollapseBelow, k.ExpandBelow, k.Back}},
 		{Title: "Jump", Keys: []key.Binding{k.Home, k.End, k.PageUp, k.PageDown}},
 		{Title: "Selected", Keys: k.Resource()},
 		{Title: "Everything", Keys: []key.Binding{k.Issues, k.Filter, k.Reload}},

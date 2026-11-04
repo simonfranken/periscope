@@ -51,11 +51,23 @@ func fixture() []*resource.Object {
 	return []*resource.Object{a, b, f}
 }
 
+// inNamespace puts objs into a namespace "ns", the only top-level object.
+func inNamespace(objs []*resource.Object) []*resource.Object {
+	ns := &resource.Object{Kind: resource.KindNamespace, Name: "ns", Path: "ns", Children: objs}
+	for _, o := range objs {
+		o.Parent = ns
+	}
+	return []*resource.Object{ns}
+}
+
+// newTree shows the fixture inside the namespace "ns": the navigation
+// tests run inside a namespace, where objects expand in place.
 func newTree(t *testing.T) *Model {
 	t.Helper()
 	m := New(theme.Default())
-	m.SetRoots(fixture())
+	m.SetRoots(inNamespace(fixture()))
 	m.SetSize(80, 20)
+	m.EnterPath("ns")
 	return &m
 }
 
@@ -85,13 +97,13 @@ func TestReplaceRootsKeepsState(t *testing.T) {
 	m.Right() // expand c, cursor on d
 	assertCursor(t, m, "d")
 
-	m.ReplaceRoots(fixture()) // same paths, new nodes
+	m.ReplaceRoots(inNamespace(fixture())) // same paths, new nodes
 	assertCursor(t, m, "d")
 	if got := len(visible(m)); got != 8 {
 		t.Errorf("visible rows = %v, want b and c still expanded", visible(m))
 	}
 
-	m.ReplaceRoots(fixture()[:1]) // only "a" left
+	m.ReplaceRoots(inNamespace(fixture()[:1])) // only "a" left
 	assertCursor(t, m, "a")
 }
 
@@ -120,8 +132,11 @@ func TestDownSkipsHeaders(t *testing.T) {
 	assertCursor(t, m, "f")
 	m.Up()
 	m.Up()
-	m.Up() // stays at start
 	assertCursor(t, m, "a")
+	m.Up() // the header, which stands for the namespace
+	assertCursor(t, m, "ns")
+	m.Up() // stays at start
+	assertCursor(t, m, "ns")
 }
 
 func TestRightExpandsAndSelectsFirstChild(t *testing.T) {
@@ -167,8 +182,11 @@ func TestLeftOnExpandedNodeCollapsesIt(t *testing.T) {
 	if m.expanded["b"] {
 		t.Fatal("b should be collapsed")
 	}
-	m.Left() // top level and collapsed: no-op
-	assertCursor(t, m, "b")
+	m.Left() // top level and collapsed: back to the cluster level
+	assertCursor(t, m, "ns")
+	if m.Scope() != nil {
+		t.Fatal("Left on a collapsed top-level object should leave the namespace")
+	}
 }
 
 func TestExpansionStateKept(t *testing.T) {
@@ -202,7 +220,7 @@ func TestCollapsingAncestorMovesCursor(t *testing.T) {
 	m.Down()
 	m.Right()
 	m.Right() // cursor d
-	m.setExpanded(m.roots[1], false)
+	m.setExpanded(m.scope.Children[1], false)
 	assertCursor(t, m, "b")
 }
 
@@ -309,11 +327,12 @@ func TestFilterSelectionMovesToNextThenPrevious(t *testing.T) {
 func TestFilterWithoutMatchSelectsNothing(t *testing.T) {
 	m := newTree(t)
 	m.SetFilter("zzz")
-	if m.Selected() != nil || len(m.rows()) != 0 {
+	if !m.RootSelected() || len(m.rows()) != 0 { // the header, for ns, remains
 		t.Fatalf("selected %v, rows %v", m.Selected(), visible(m))
 	}
 	m.Down() // must not panic
 	m.SetFilter("f")
+	m.Down() // the header stays selected, like the cluster's
 	assertCursor(t, m, "f")
 }
 
@@ -341,22 +360,25 @@ func equal(a, b []string) bool {
 	return true
 }
 
-// newTreeWithRoot is newTree with a selectable cluster.
+// newTreeWithRoot is newTree with a selectable cluster, and the header
+// selected; inside ns, the header stands for ns.
 func newTreeWithRoot(t *testing.T) *Model {
 	t.Helper()
 	m := New(theme.Default())
 	m.SetRoot(&resource.Object{Name: "root"})
-	m.SetRoots(fixture())
+	m.SetRoots(inNamespace(fixture()))
 	m.SetSize(80, 20)
+	m.EnterPath("ns")
+	m.Home() // the header: inside ns, it stands for ns
 	return &m
 }
 
 func TestRootIsSelectedInitially(t *testing.T) {
 	m := newTreeWithRoot(t)
 	if !m.RootSelected() {
-		t.Fatal("root not selected initially")
+		t.Fatal("header not selected")
 	}
-	assertCursor(t, m, "")
+	assertCursor(t, m, "ns")
 }
 
 func TestRootIsAboveFirstRow(t *testing.T) {
@@ -393,20 +415,16 @@ func TestRootNavigationKeys(t *testing.T) {
 	m := newTreeWithRoot(t)
 	m.Right() // like Down
 	assertCursor(t, m, "a")
-	m.Left() // top level, nothing to collapse: the parent is the root
-	if !m.RootSelected() {
-		t.Error("Left on a top-level object should select the root")
-	}
-	m.Left()
+	m.Up()
 	m.Toggle()
-	m.ExpandBelow() // on the cluster: everything
+	m.ExpandBelow() // on the header: all of ns
 	if !m.RootSelected() {
-		t.Error("fold keys must not move the root selection")
+		t.Error("fold keys must not move the header selection")
 	}
 	assertRows(t, m, "a", "src", "b", "modules", "c", "d", "e", "f")
-	m.CollapseBelow() // on the cluster: everything
-	if !m.RootSelected() {
-		t.Error("fold keys must not move the root selection")
+	m.CollapseBelow() // on the header: all of ns
+	if !m.RootSelected() || m.Scope() == nil {
+		t.Error("collapsing ns keeps the header selected, inside ns")
 	}
 	assertRows(t, m, "a", "src", "b", "f")
 
@@ -417,24 +435,28 @@ func TestRootNavigationKeys(t *testing.T) {
 	m.CollapseBelow()
 	m.CollapseBelow()
 	assertCursor(t, m, "b")
-	m.CollapseBelow() // a collapsed top-level object climbs to the cluster
+	m.CollapseBelow() // a collapsed top-level object climbs to the header
 	if !m.RootSelected() {
-		t.Error("CollapseBelow on a collapsed top-level object should select the root")
+		t.Error("CollapseBelow on a collapsed top-level object should select the header")
 	}
+	m.CollapseBelow() // nothing expanded: back to the cluster level
+	if m.Scope() != nil {
+		t.Error("CollapseBelow on a collapsed namespace's header should leave it")
+	}
+	assertCursor(t, m, "ns")
 }
 
 func TestReplaceRootsKeepsRootSelected(t *testing.T) {
 	m := newTreeWithRoot(t)
-	newRoot := &resource.Object{Name: "root"}
-	m.SetRoot(newRoot)
-	m.ReplaceRoots(fixture())
-	if !m.RootSelected() || m.Selected() != newRoot {
-		t.Error("root selection should move to the reloaded root")
+	m.SetRoot(&resource.Object{Name: "root"})
+	m.ReplaceRoots(inNamespace(fixture()))
+	if !m.RootSelected() || m.Selected() != m.Scope() || m.Scope() != m.roots[0] {
+		t.Error("the header selection should move to the reloaded namespace")
 	}
 
 	m.Down()
 	m.SetRoot(&resource.Object{Name: "root"})
-	m.ReplaceRoots(fixture())
+	m.ReplaceRoots(inNamespace(fixture()))
 	assertCursor(t, m, "a")
 }
 
@@ -491,9 +513,9 @@ func TestProblemsOnlyShowsIssuesWithAncestors(t *testing.T) {
 func TestProblemsOnlyKeepsUnknownStates(t *testing.T) {
 	m := newTree(t)
 	healthy(t, m)
-	f := m.roots[2]
+	f := m.scope.Children[2]
 	f.Status, f.Err = nil, os.ErrNotExist // failed to load
-	m.roots[0].Status = nil               // still loading
+	m.scope.Children[0].Status = nil      // still loading
 	m.SetProblemsOnly(true)
 	if got, want := visible(m), []string{"a", "src", "f"}; !equal(got, want) {
 		t.Fatalf("rows = %v, want %v", got, want)
@@ -532,14 +554,14 @@ func TestRefitMovesSelectionWhenProblemDisappears(t *testing.T) {
 	healthy(t, m, "a", "f")
 	m.SetProblemsOnly(true)
 	assertCursor(t, m, "a")
-	m.roots[0].Status.Phase = ""
+	m.scope.Children[0].Status.Phase = ""
 	m.Refit()
 	assertCursor(t, m, "f")
 }
 
 func TestStatusColumnFitsWidestStatus(t *testing.T) {
 	m := newTree(t)
-	b := m.roots[1]
+	b := m.scope.Children[1]
 	// "rolling out +1 ·1 ·1 ·1" is wider than the minimum column
 	b.Status = &resource.Status{Desired: 3, Ready: 3, Updated: 1, Suspended: true}
 	b.Children[0].Err = errors.New("forbidden")
@@ -573,7 +595,7 @@ func customTree(t *testing.T) *Model {
 	m := New(theme.Default())
 	m.SetRoots(resource.Arrange([]*resource.Object{ns}))
 	m.SetSize(80, 20)
-	m.Right() // expand shop, select api
+	m.Right() // enter shop, select api
 	return &m
 }
 
@@ -593,7 +615,7 @@ func rowsWithDepth(m *Model) string {
 
 func TestCustomResourcesSectionStartsCollapsed(t *testing.T) {
 	m := customTree(t)
-	if got, want := rowsWithDepth(m), "0:shop 1:deployments 2:api 1:custom resources"; got != want {
+	if got, want := rowsWithDepth(m), "0:deployments 1:api 0:custom resources"; got != want {
 		t.Fatalf("rows = %v, want %v", got, want)
 	}
 }
@@ -604,7 +626,7 @@ func TestCustomResourcesSectionExpands(t *testing.T) {
 	assertCursor(t, m, section)
 	m.Right()
 	assertCursor(t, m, "shop/certificate.cert-manager.io/api-tls")
-	want := "0:shop 1:deployments 2:api 1:custom resources 2:certificates 3:api-tls 2:routes 3:web"
+	want := "0:deployments 1:api 0:custom resources 1:certificates 2:api-tls 1:routes 2:web"
 	if got := rowsWithDepth(m); got != want {
 		t.Fatalf("rows = %v, want %v", got, want)
 	}
@@ -612,12 +634,17 @@ func TestCustomResourcesSectionExpands(t *testing.T) {
 	assertCursor(t, m, "shop/route.route.openshift.io/web") // skips the routes header
 	m.Left()                                                // a leaf: collapses the section
 	assertCursor(t, m, section)
+	m.Left() // a collapsed top-level object: back to the cluster level
+	assertCursor(t, m, "shop")
+	if m.Scope() != nil {
+		t.Fatal("Left on a collapsed top-level object should leave the namespace")
+	}
 }
 
 func TestFilterReachesCustomResources(t *testing.T) {
 	m := customTree(t)
 	m.SetFilter("cert-manager")
-	assertRows(t, m, "shop", section, "certificates", "shop/certificate.cert-manager.io/api-tls")
+	assertRows(t, m, section, "certificates", "shop/certificate.cert-manager.io/api-tls")
 	assertCursor(t, m, section) // api is filtered out: the next visible row
 }
 
@@ -626,5 +653,137 @@ func TestProblemsOnlyShowsNotReadyCustomResource(t *testing.T) {
 	web := m.roots[0].Children[1].Children[1]
 	web.Status = &resource.Status{Conditions: []resource.Condition{{Type: "Ready", Status: "False"}}}
 	m.SetProblemsOnly(true)
-	assertRows(t, m, "shop", section, "routes", "shop/route.route.openshift.io/web")
+	assertRows(t, m, section, "routes", "shop/route.route.openshift.io/web")
+}
+
+// clusterTree is the cluster level: three namespaces (one empty) and a
+// top-level section, with a selectable cluster.
+func clusterTree(t *testing.T) *Model {
+	t.Helper()
+	issuer := &resource.Type{Kind: "ClusterIssuer", Plural: "clusterissuers", Group: "cert-manager.io"}
+	mk := func(name string, children ...*resource.Object) *resource.Object {
+		ns := &resource.Object{Kind: resource.KindNamespace, Name: name, Path: name, Status: &resource.Status{}, Children: children}
+		for _, c := range children {
+			c.Parent, c.Namespace, c.Path = ns, name, name+"/"+c.Ref()
+			c.Status = &resource.Status{}
+		}
+		return ns
+	}
+	top := resource.Arrange([]*resource.Object{
+		mk("payments", &resource.Object{Kind: resource.KindDeployment, Name: "checkout", Group: "deployments"}),
+		mk("shop",
+			&resource.Object{Kind: resource.KindDeployment, Name: "api", Group: "deployments"},
+			&resource.Object{Kind: resource.KindDeployment, Name: "web", Group: "deployments"}),
+		mk("empty"),
+		{Kind: resource.KindCustom, Type: issuer, Name: "letsencrypt", Path: "clusterissuer.cert-manager.io/letsencrypt", Status: &resource.Status{}},
+	})
+	m := New(theme.Default())
+	m.SetRoot(&resource.Object{Kind: resource.KindCluster, Status: &resource.Status{}})
+	m.SetRoots(top)
+	m.SetSize(80, 20)
+	return &m
+}
+
+func TestClusterLevelListsTopLevelOnly(t *testing.T) {
+	m := clusterTree(t)
+	assertRows(t, m, "payments", "shop", "empty", "cluster", "custom resources")
+	if !m.RootSelected() || m.Scope() != nil {
+		t.Fatal("start: the cluster selected, at the cluster level")
+	}
+	m.Down()
+	m.ExpandBelow() // enters payments with everything expanded
+	if m.Scope() == nil || m.Scope().Path != "payments" {
+		t.Fatalf("scope = %v, want payments", m.Scope())
+	}
+}
+
+func TestEnterAndBack(t *testing.T) {
+	m := clusterTree(t)
+	m.Down()
+	m.Down() // shop
+	m.Right()
+	assertRows(t, m, "deployments", "shop/deployment/api", "shop/deployment/web")
+	assertCursor(t, m, "shop/deployment/api")
+	m.Down() // web
+	m.Back()
+	assertCursor(t, m, "shop")
+	assertRows(t, m, "payments", "shop", "empty", "cluster", "custom resources")
+
+	m.Toggle() // space enters too, and restores the selection
+	assertCursor(t, m, "shop/deployment/web")
+	m.Up()
+	m.Up() // the header, for shop
+	assertCursor(t, m, "shop")
+	m.Left() // on the header: back
+	if m.Scope() != nil {
+		t.Fatal("Left on the header should leave the namespace")
+	}
+}
+
+func TestEnterEmptyNamespaceIsNoop(t *testing.T) {
+	m := clusterTree(t)
+	m.Select("empty")
+	m.Right()
+	if m.Scope() != nil {
+		t.Fatal("a namespace without objects has nothing to enter")
+	}
+}
+
+func TestEnterTopLevelSection(t *testing.T) {
+	m := clusterTree(t)
+	if !m.EnterPath("custom resources") {
+		t.Fatal("the top-level section can be entered")
+	}
+	assertRows(t, m, "clusterissuers", "clusterissuer.cert-manager.io/letsencrypt")
+	if m.EnterPath("nope") {
+		t.Fatal("EnterPath of an unknown path reports false")
+	}
+}
+
+func TestFilterAppliesToCurrentLevel(t *testing.T) {
+	m := clusterTree(t)
+	m.SetFilter("api") // a workload in shop, not a namespace name
+	assertRows(t, m)
+	m.SetFilter("sho")
+	assertRows(t, m, "shop")
+
+	m.SetFilter("")
+	m.EnterPath("shop")
+	m.SetFilter("shop") // inside shop, its own name matches nothing
+	assertRows(t, m)
+	m.SetFilter("web")
+	assertRows(t, m, "deployments", "shop/deployment/web")
+	m.Back()
+	if m.Filter() != "" {
+		t.Fatal("changing the level clears the filter")
+	}
+}
+
+func TestProblemsOnlyAtClusterLevelKeepsProblemsBelow(t *testing.T) {
+	m := clusterTree(t)
+	m.topLevel("shop").Children[1].Status.Phase = resource.PhaseFailed
+	m.SetProblemsOnly(true)
+	assertRows(t, m, "shop")
+	m.EnterPath("shop")
+	assertRows(t, m, "deployments", "shop/deployment/web") // problems only stays on
+}
+
+func TestReloadInsideNamespace(t *testing.T) {
+	m := clusterTree(t)
+	m.EnterPath("shop")
+	m.Down() // web
+	fresh := clusterTree(t)
+	m.ReplaceRoots(fresh.roots)
+	if m.Scope() != fresh.topLevel("shop") {
+		t.Fatal("the scope should move to the reloaded namespace")
+	}
+	assertCursor(t, m, "shop/deployment/web")
+	if m.Selected() != fresh.topLevel("shop").Children[1] {
+		t.Fatal("the selection should be the reloaded object")
+	}
+
+	m.ReplaceRoots(fresh.roots[:1]) // shop is gone
+	if m.Scope() != nil {
+		t.Fatal("a vanished namespace leads back to the cluster level")
+	}
 }

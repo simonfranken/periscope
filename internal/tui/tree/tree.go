@@ -21,12 +21,16 @@ const (
 )
 
 type Model struct {
-	id       string // zone prefix, unique to this instance
-	theme    theme.Theme
-	root     *resource.Object // the cluster: selectable, above the first row; may be nil
-	roots    []*resource.Object
-	expanded map[string]bool // keyed by Object.Path; kept when ancestors collapse
-	filter   string          // lower-case; empty if not filtering
+	id    string // zone prefix, unique to this instance
+	theme theme.Theme
+	root  *resource.Object // the cluster: selectable, above the first row; may be nil
+	roots []*resource.Object
+	// scope is the top-level object (a namespace or a section) the tree shows
+	// the contents of; nil at the cluster level, which lists roots only.
+	scope    *resource.Object
+	lastIn   map[string]string // per scope path: the path selected when it was left
+	expanded map[string]bool   // keyed by Object.Path; kept when ancestors collapse
+	filter   string            // lower-case; empty if not filtering
 	// problemsOnly hides objects without issues; it combines with filter.
 	problemsOnly bool
 	cursor       *resource.Object
@@ -37,17 +41,20 @@ type Model struct {
 }
 
 func New(t theme.Theme) Model {
-	return Model{id: zone.NewPrefix(), theme: t, expanded: map[string]bool{}}
+	return Model{id: zone.NewPrefix(), theme: t, expanded: map[string]bool{}, lastIn: map[string]string{}}
 }
 
 // SetRoot sets the cluster, which can be selected like a row above the
 // first one. Call it before SetRoots / ReplaceRoots.
 func (m *Model) SetRoot(root *resource.Object) { m.root = root }
 
-// SetRoots replaces the tree. All nodes start collapsed. The cluster is
-// selected if there is one, else the first resource.
+// SetRoots replaces the tree and shows the cluster level. All nodes start
+// collapsed. The cluster is selected if there is one, else the first
+// resource.
 func (m *Model) SetRoots(roots []*resource.Object) {
 	m.roots = roots
+	m.scope = nil
+	m.lastIn = map[string]string{}
 	m.expanded = map[string]bool{}
 	m.cursor = nil
 	m.offset = 0
@@ -59,18 +66,26 @@ func (m *Model) SetRoots(roots []*resource.Object) {
 }
 
 // ReplaceRoots swaps in a reloaded tree. Unlike SetRoots it keeps the
-// expansion state and the cursor (by path); if the selected object is
-// gone, the cursor moves to the first one.
+// level, the expansion state and the cursor (by path); if the selected
+// object is gone, the cursor moves to the first one. If the scope is gone,
+// the cluster level is shown.
 func (m *Model) ReplaceRoots(roots []*resource.Object) {
 	var path string
 	if m.cursor != nil {
 		path = m.cursor.Path
 	}
+	wasHead := m.onRoot()
 	wasRoot := m.cursor.IsRoot() // by path: SetRoot may have installed a new node
 	m.roots = roots
+	if m.scope != nil {
+		m.scope = m.topLevel(m.scope.Path)
+	}
 	m.cursor = nil
-	if wasRoot && m.root != nil {
+	switch {
+	case wasRoot && m.root != nil:
 		m.cursor = m.root
+	case wasHead && m.scope != nil:
+		m.cursor = m.scope
 	}
 	for _, r := range m.rows() {
 		if m.cursor == nil && r.kind == rowNode && r.node.Path == path {
@@ -93,17 +108,107 @@ func (m *Model) SetSize(w, h int) {
 func (m *Model) SetSpinner(frame string) { m.spinner = frame }
 
 // Selected returns the object under the cursor, or nil. It is the
-// cluster (empty Path) while that is selected.
+// cluster (empty Path), or the scope inside a namespace, while the header
+// is selected.
 func (m Model) Selected() *resource.Object { return m.cursor }
 
-// RootSelected reports whether the cluster is selected.
+// RootSelected reports whether the header is selected.
 func (m Model) RootSelected() bool { return m.onRoot() }
 
-func (m Model) onRoot() bool { return m.root != nil && m.cursor == m.root }
+// Scope returns the namespace or section whose contents are shown, nil at
+// the cluster level.
+func (m Model) Scope() *resource.Object { return m.scope }
 
-// RootZone is the zone mark of the cluster's display; a click on it
-// selects the cluster. The caller wraps the header in it.
+// head is the object the header stands for: the scope, or the cluster.
+func (m Model) head() *resource.Object {
+	if m.scope != nil {
+		return m.scope
+	}
+	return m.root
+}
+
+func (m Model) onRoot() bool { return m.cursor != nil && m.cursor == m.head() }
+
+// level is the objects listed at the top of the tree: the scope's children,
+// or the top level.
+func (m Model) level() []*resource.Object {
+	if m.scope != nil {
+		return m.scope.Children
+	}
+	return m.roots
+}
+
+// topLevel returns the top-level object with the given path, or nil.
+func (m Model) topLevel(path string) *resource.Object {
+	for _, o := range m.roots {
+		if o.Path == path {
+			return o
+		}
+	}
+	return nil
+}
+
+// Enter shows the contents of the top-level object o (a namespace or a
+// section) without it, selecting what was selected when it was last left,
+// else its first object. The filter is cleared: it applies to one level.
+func (m *Model) Enter(o *resource.Object) {
+	if o == nil || len(o.Children) == 0 {
+		return
+	}
+	m.scope = o
+	m.filter = ""
+	m.cursor = nil
+	m.offset = 0
+	if p, ok := m.lastIn[o.Path]; ok {
+		m.Select(p)
+		if p == o.Path {
+			m.cursor = o
+		}
+	}
+	if m.cursor == nil {
+		m.cursor = m.firstNode()
+	}
+	if m.cursor == nil {
+		m.cursor = o
+	}
+	m.clampOffset()
+}
+
+// EnterPath enters the top-level object with the given path and reports
+// whether there is one.
+func (m *Model) EnterPath(path string) bool {
+	o := m.topLevel(path)
+	if o == nil || len(o.Children) == 0 {
+		return false
+	}
+	m.Enter(o)
+	return true
+}
+
+// Back returns to the cluster level from inside a namespace or section,
+// which becomes the selection. The filter is cleared.
+func (m *Model) Back() {
+	if m.scope == nil {
+		return
+	}
+	if m.cursor != nil {
+		m.lastIn[m.scope.Path] = m.cursor.Path
+	}
+	m.cursor = m.scope
+	m.scope = nil
+	m.filter = ""
+	m.offset = 0
+	m.clampOffset()
+}
+
+// RootZone is the zone mark of the header; a click on it selects what the
+// header stands for. The caller wraps the header in it.
 func (m Model) RootZone() string { return m.id + "root" }
+
+// BackZone is the zone mark of the cluster's name in the header's
+// breadcrumb; inside a namespace, a click on it goes back to the cluster
+// level. The caller wraps the name in it.
+func (m Model) BackZone() string { return m.id + "back" }
 
 // --- navigation --------------------------------------------------------------
 
@@ -121,95 +226,134 @@ func (m *Model) PageDown() { m.moveBy(max(m.height-1, 1)) }
 func (m *Model) Home() { m.moveBy(-len(m.rows())) }
 func (m *Model) End()  { m.moveBy(len(m.rows())) }
 
-// Toggle expands or collapses the selected resource.
+// atClusterLevel reports whether the tree lists the top level, whose
+// objects are entered, not expanded.
+func (m Model) atClusterLevel() bool { return m.scope == nil }
+
+// Toggle expands or collapses the selected resource; at the cluster level it
+// enters it.
 func (m *Model) Toggle() {
-	if m.cursor != nil && len(m.cursor.Children) > 0 {
+	switch {
+	case m.cursor == nil || m.onRoot():
+	case m.atClusterLevel():
+		m.Enter(m.cursor)
+	case len(m.cursor.Children) > 0:
 		m.setExpanded(m.cursor, !m.expanded[m.cursor.Path])
 	}
 }
 
-// Right expands the selected object and selects its first child.
+// Right expands the selected object and selects its first child; at the
+// cluster level it enters it.
 func (m *Model) Right() {
-	if m.onRoot() {
+	switch {
+	case m.onRoot():
 		m.Down()
-		return
+	case m.cursor == nil || len(m.cursor.Children) == 0:
+	case m.atClusterLevel():
+		m.Enter(m.cursor)
+	default:
+		m.setExpanded(m.cursor, true)
+		m.Down() // children directly follow their parent
 	}
-	if m.cursor == nil || len(m.cursor.Children) == 0 {
-		return
-	}
-	m.setExpanded(m.cursor, true)
-	m.Down() // children directly follow their parent
 }
 
 // Left collapses the selected object if it is expanded; otherwise it
-// collapses the parent and selects it.
+// collapses the parent and selects it. From the top of a namespace (or its
+// header) it goes back to the cluster level; at the cluster level it selects
+// the header.
 func (m *Model) Left() {
 	switch {
 	case m.cursor == nil:
-	case m.expanded[m.cursor.Path] && len(m.cursor.Children) > 0:
+	case m.scope != nil && (m.onRoot() || m.cursor.Parent == m.scope && !m.isExpanded(m.cursor)):
+		m.Back()
+	case m.onRoot():
+	case !m.atClusterLevel() && m.expanded[m.cursor.Path] && len(m.cursor.Children) > 0:
 		m.setExpanded(m.cursor, false)
-	case m.cursor.Parent != nil:
+	case m.cursor.Parent != nil && m.cursor.Parent != m.scope:
 		m.setExpanded(m.cursor.Parent, false)
-	case m.root != nil && !m.onRoot():
-		m.cursor = m.root // the cluster is the parent of the top level
+	case m.head() != nil:
+		m.cursor = m.head() // the header is the parent of the top level
 		m.offset = 0
 	}
 }
 
-// below returns the objects directly below s: the top level for the cluster.
-func (m *Model) below(s *resource.Object) []*resource.Object {
-	if s == m.root {
-		return m.roots
-	}
-	return s.Children
-}
-
 // ExpandBelow expands the selection and everything below it; siblings and
-// the selection stay. On the cluster it expands everything.
+// the selection stay. On the header inside a namespace it expands the whole
+// namespace; at the cluster level it enters the selection with everything
+// expanded.
 func (m *Model) ExpandBelow() {
-	if m.cursor == nil {
+	s := m.cursor
+	switch {
+	case s == nil:
+		return
+	case m.atClusterLevel() && m.onRoot():
+		return // the cluster level is a list: nothing to expand
+	case m.atClusterLevel():
+		if len(s.Children) == 0 {
+			return
+		}
+		m.expandAll(s.Children)
+		m.Enter(s)
 		return
 	}
-	if len(m.cursor.Children) > 0 {
-		m.expanded[m.cursor.Path] = true
+	if !m.onRoot() && len(s.Children) > 0 {
+		m.expanded[s.Path] = true
 	}
-	resource.Walk(m.below(m.cursor), func(s *resource.Object) {
+	m.expandAll(s.Children)
+	m.clampOffset()
+}
+
+func (m *Model) expandAll(objs []*resource.Object) {
+	resource.Walk(objs, func(s *resource.Object) {
 		if len(s.Children) > 0 {
 			m.expanded[s.Path] = true
 		}
 	})
-	m.clampOffset()
 }
 
 // CollapseBelow collapses the selection and everything below it, and
 // forgets what was expanded there; siblings stay. With nothing to collapse
 // (a leaf or a collapsed object) it acts on the parent and selects it, so
-// repeating it climbs up. On the cluster it collapses everything.
+// repeating it climbs up: to the header, which collapses the namespace, and
+// then back to the cluster level. On the cluster it forgets everything that
+// was expanded anywhere.
 func (m *Model) CollapseBelow() {
 	s := m.cursor
-	if s == nil {
+	switch {
+	case s == nil:
 		return
-	}
-	if s != m.root && !m.expanded[s.Path] {
-		switch {
-		case s.Parent != nil:
-			s = s.Parent
-		case m.root != nil:
-			s = m.root // the cluster is the parent of the top level
-		default:
-			m.expanded = map[string]bool{} // no cluster row: collapse everything
-			m.clampOffset()
+	case m.scope != nil && m.onRoot():
+		if !m.anyExpanded(m.scope.Children) {
+			m.Back()
 			return
 		}
+	case m.atClusterLevel() && !m.onRoot():
+		if m.root == nil {
+			m.expanded = map[string]bool{} // no cluster row: forget everything
+			return
+		}
+		s = m.root // the cluster is the parent of the top level
+		m.cursor = s
+	case !m.atClusterLevel() && !m.expanded[s.Path]:
+		s = s.Parent // the scope for a top-level object, so the header
 		m.cursor = s
 	}
-	if s == m.root {
+	switch s {
+	case m.root:
 		m.expanded = map[string]bool{}
-	} else {
-		delete(m.expanded, s.Path)
+	default:
+		if s != m.scope {
+			delete(m.expanded, s.Path)
+		}
 		resource.Walk(s.Children, func(c *resource.Object) { delete(m.expanded, c.Path) })
 	}
 	m.clampOffset()
+}
+
+func (m *Model) anyExpanded(objs []*resource.Object) bool {
+	any := false
+	resource.Walk(objs, func(s *resource.Object) { any = any || m.expanded[s.Path] })
+	return any
 }
 
 // Select selects the object with the given path if it is visible.
@@ -261,7 +405,7 @@ func (m *Model) moveBy(n int) {
 	for j := i + step; n > 0 && j >= -1 && j < len(rows); j += step {
 		switch {
 		case j == -1:
-			if m.root != nil {
+			if m.head() != nil {
 				i = -1
 				n--
 			}
@@ -271,7 +415,7 @@ func (m *Model) moveBy(n int) {
 		}
 	}
 	if i < 0 {
-		m.cursor = m.root
+		m.cursor = m.head()
 	} else {
 		m.cursor = rows[i].node
 	}
@@ -351,8 +495,12 @@ func (m *Model) Update(msg tea.Msg) {
 	if mm.Action != tea.MouseActionPress || mm.Button != tea.MouseButtonLeft {
 		return
 	}
-	if m.root != nil && zone.Get(m.RootZone()).InBounds(mm) {
-		m.cursor = m.root
+	if m.scope != nil && zone.Get(m.BackZone()).InBounds(mm) {
+		m.Back()
+		return
+	}
+	if m.head() != nil && zone.Get(m.RootZone()).InBounds(mm) {
+		m.cursor = m.head()
 		m.offset = 0
 		return
 	}
