@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"context"
+
 	tea "github.com/charmbracelet/bubbletea"
 
 	"periscope/internal/resource"
@@ -13,10 +15,13 @@ type contextsMsg struct {
 	err      error
 }
 
-// switchedMsg is the first tree of the context name, read by p.
+// switchedMsg is the first tree of the context name, read by p within
+// pctx, which becomes the provider's context if the switch succeeds.
 type switchedMsg struct {
 	name    string
 	p       resource.Provider
+	pctx    context.Context
+	pcancel context.CancelFunc
 	cluster *resource.Cluster
 	err     error
 }
@@ -24,8 +29,15 @@ type switchedMsg struct {
 // openPicker opens the context picker and reads the contexts.
 func (m Model) openPicker() (tea.Model, tea.Cmd) {
 	sw, ok := m.provider.(resource.Switcher)
-	if !ok {
-		cmd := m.footer.Flash("this data source has no other contexts")
+	var flash string
+	switch {
+	case !ok:
+		flash = "this data source has no other contexts"
+	case m.switching != "":
+		flash = "wait for the switch to " + m.switching // its list would be the old context's
+	}
+	if flash != "" {
+		cmd := m.footer.Flash(flash)
 		m.layout()
 		return m, cmd
 	}
@@ -107,14 +119,14 @@ func (m Model) confirmPick() (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 	m.switching, m.loadingTree = it.Name, true
-	ctx, name := m.ctx, it.Name
+	pctx, pcancel := context.WithCancel(m.ctx)
+	name := it.Name
 	load := func() tea.Msg {
-		c, err := p.Tree(ctx)
-		return switchedMsg{name, p, c, err}
+		c, err := p.Tree(pctx)
+		return switchedMsg{name, p, pctx, pcancel, c, err}
 	}
-	cmd := m.footer.Flash("switching to " + name + "…")
-	m.layout()
-	return m, tea.Batch(load, cmd, m.tick())
+	m.layout() // the line above the footer says it's switching
+	return m, tea.Batch(load, m.tick())
 }
 
 // switched installs the new context's tree, or keeps the old one and says
@@ -125,11 +137,15 @@ func (m Model) switched(msg switchedMsg) (tea.Model, tea.Cmd) {
 	}
 	m.switching, m.loadingTree = "", false
 	if msg.err != nil {
+		if msg.pcancel != nil {
+			msg.pcancel()
+		}
 		cmd := m.footer.Alert("can't reach " + msg.name + ": " + msg.err.Error())
 		m.layout()
 		return m, cmd
 	}
-	m.provider = msg.p
+	m.pcancel() // the old provider's requests stop
+	m.provider, m.pctx, m.pcancel = msg.p, msg.pctx, msg.pcancel
 	m.cluster, m.byPath = nil, nil // a new cluster: treeLoaded starts afresh
 	if m.filtering {
 		m.closeFilter()

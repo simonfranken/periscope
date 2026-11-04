@@ -67,6 +67,7 @@ func TestContextsAndSwitch(t *testing.T) {
 }
 
 func TestUnreachableContextFails(t *testing.T) {
+	loginDelay = 0
 	s, err := New().Switch("prod-eu")
 	if err != nil {
 		t.Fatal(err) // switching itself doesn't talk to the cluster

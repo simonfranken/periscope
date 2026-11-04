@@ -30,7 +30,7 @@ Two levels (P15). The **cluster level** lists the namespaces and, under
    legacy-feature           terminating            400d  │ Server      https://127.0.0.1:6443
  cluster                                                 │ Namespaces  8 · 7 errors, 10 warnings, 3 notes
    ▸ custom resources [1]                                │
- ↑↓/jk move • →/enter open • ! problems only • / filter • C context • r reload ? help • q quit
+ ↑↓/jk move • →/enter open • ! problems only • / filter • C context • r reload       ? help • q quit
 ```
 
 `→` / `enter` on a namespace (or section) **opens** it: the tree shows its
@@ -55,7 +55,7 @@ contents without the namespace row, and the header becomes a breadcrumb:
 | Header | 1 line |
 | Tree | Remaining width |
 | Detail pane | 40% of the width, at least 36 columns; hidden below 90 columns |
-| Line above the footer | 1 line, only while filtering, showing problems only, or until the first key (hint) |
+| Line above the footer | 1 line, only while switching the context, filtering, showing problems only, or until the first key (hint) |
 | Footer | 1 line (more with full help) |
 
 ### Key bar and palette
@@ -331,8 +331,10 @@ dropped and it is drawn in `Backdrop`, so the popup has the focus.
 - Width at most 72 columns, height as the list (at most 14 rows), so
   filtering doesn't resize it. While reading: spinner and `reading
   contexts…`; no match: `nothing matches`; error: red, inside the popup.
-- Switching: the footer says `switching to staging…` while the current
-  cluster stays on screen; then the new cluster's cluster level is shown,
+- Switching: the line above the footer says `⠼ switching to staging…`
+  for as long as it takes (it takes precedence over the filter and problems
+  only), while the current cluster stays on screen and can be used; `C`
+  meanwhile says `wait for the switch to staging`. Then the new cluster's cluster level is shown,
   or its context's namespace (F4), and `switched to staging`. If the new
   context can't be reached, the current cluster stays and the footer says
   why (`can't reach prod-eu: <error>`), longer than other messages.

@@ -29,6 +29,10 @@ var contexts = []resource.Context{
 	{Name: "prod-eu", Cluster: "prod-eu-1", Namespace: "shop"},
 }
 
+// loginDelay is how long prod-eu's login takes to fail: longer than a
+// flash, so the pending switch shows. Tests shorten it.
+var loginDelay = 3 * time.Second
+
 // New returns the mock provider for the current context, kind-dev.
 func New() *Provider { return newFor("kind-dev") }
 
@@ -65,10 +69,10 @@ func (p *Provider) Tree(ctx context.Context) (*resource.Cluster, error) {
 	case "staging":
 		c = staging(statuses, time.Now())
 	case "prod-eu":
-		select { // the plugin takes a moment before it gives up
+		select { // the plugin takes a while before it gives up
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case <-time.After(time.Second):
+		case <-time.After(loginDelay):
 		}
 		return nil, fmt.Errorf("getting credentials: exec: kubelogin: interactive login needs a browser, run `kubelogin` in a terminal first")
 	default:

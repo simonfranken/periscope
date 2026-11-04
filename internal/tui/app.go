@@ -32,8 +32,12 @@ const (
 type Model struct {
 	ctx      context.Context
 	provider resource.Provider
-	theme    theme.Theme
-	keys     keyMap
+	// pctx is the provider's context: cancelled when the provider is switched
+	// away from, so its requests stop.
+	pctx    context.Context
+	pcancel context.CancelFunc
+	theme   theme.Theme
+	keys    keyMap
 
 	cluster *resource.Cluster
 	byPath  map[string]*resource.Object
@@ -95,9 +99,12 @@ func New(ctx context.Context, p resource.Provider, opts ...Option) Model {
 	fi.Cursor.Style = theme.Fg(t.Primary)
 	fi.Placeholder = "filter by namespace, kind or name"
 	fi.PlaceholderStyle = theme.Fg(t.Muted)
+	pctx, pcancel := context.WithCancel(ctx)
 	m := Model{
 		ctx:         ctx,
 		provider:    p,
+		pctx:        pctx,
+		pcancel:     pcancel,
 		theme:       t,
 		keys:        k,
 		loadingTree: true, // Init starts it
@@ -127,7 +134,7 @@ func (m Model) lookForUpdate() tea.Cmd {
 }
 
 func (m Model) loadTree() tea.Cmd {
-	p, ctx := m.provider, m.ctx
+	p, ctx := m.provider, m.pctx
 	return func() tea.Msg {
 		c, err := p.Tree(ctx)
 		return treeLoadedMsg{p, c, err}
@@ -135,7 +142,7 @@ func (m Model) loadTree() tea.Cmd {
 }
 
 func (m Model) loadStatus(path string) tea.Cmd {
-	p, ctx := m.provider, m.ctx
+	p, ctx := m.provider, m.pctx
 	return func() tea.Msg {
 		st, err := p.Status(ctx, path)
 		return statusLoadedMsg{p, path, st, err}
@@ -451,7 +458,7 @@ func (m Model) filterView() string {
 // extraLine reports whether a line above the footer is shown: the filter,
 // the notice that only problems are shown, or the hint for newcomers.
 func (m Model) extraLine() bool {
-	return m.filtering || m.tree.ProblemsOnly() || m.hint
+	return m.switching != "" || m.filtering || m.tree.ProblemsOnly() || m.hint
 }
 
 // line lays out the line above the footer: left, and right right-aligned.
@@ -464,6 +471,12 @@ func (m Model) line(left, right string) string {
 func (m Model) hintView() string {
 	muted := theme.Fg(m.theme.Muted)
 	return m.line(muted.Render("new here? ")+theme.Fg(m.theme.Text).Bold(true).Render("?")+muted.Render(" shows every key and what the words mean"), "")
+}
+
+// switchingView is the line above the footer while another context's tree
+// loads, however long that takes; the current cluster stays meanwhile.
+func (m Model) switchingView() string {
+	return m.line(theme.Fg(m.theme.Primary).Render(m.spinner.View())+theme.Fg(m.theme.Muted).Render(" switching to "+m.switching+"…"), "")
 }
 
 // problemsView is the line above the footer while only problems are shown, so
@@ -531,6 +544,8 @@ func (m Model) View() string {
 	head := header.View(m.theme, m.cluster, m.tree.Scope(), m.spinner.View(), m.width, m.tree.RootSelected(), m.tree.BackZone())
 	parts := []string{zone.Mark(m.tree.RootZone(), head), body}
 	switch {
+	case m.switching != "":
+		parts = append(parts, m.switchingView())
 	case m.filtering:
 		parts = append(parts, m.filterView())
 	case m.tree.ProblemsOnly():

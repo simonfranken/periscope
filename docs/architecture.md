@@ -77,7 +77,9 @@ type Switcher interface {
 ```
 
 The app keeps the current provider until the new one's `Tree` succeeds.
-Tree and status answers name the provider they come from, and answers of a
+Each provider's requests run in a context of their own, cancelled when it
+is switched away from, so leaving a large cluster stops its requests. Tree
+and status answers name the provider they come from, and answers of a
 provider that was switched away from are dropped, so a slow status of the
 old context never lands in the new tree. The mock has three contexts
 (`kind-dev`, `staging` with namespace `shop`, and `prod-eu`, whose `Tree`
