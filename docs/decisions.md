@@ -165,3 +165,23 @@ header "everything below" is the cluster, so there both keys keep the old
 global meaning, two keys away (`g`, then `H` or `L`).
 **Consequences.** No separate global keys. The footer says `all below`.
 `L` on a large namespace still opens a long list; `H` closes it again.
+
+## P14: Resources beyond workloads
+
+**Context.** The tree showed only namespaces, workloads and pods. Inspecting
+the cluster is as important as finding problems (P11), and many real
+problems are outside workloads: a Service without endpoints, an Ingress
+whose backend is gone, a PVC that never binds, a node that is not ready.
+**Decision.** periscope shows more kinds, as further groups of a namespace
+after the workloads: Services, Ingresses, PVCs, then ConfigMaps and
+Secrets; nodes as a group at the top level; custom resources generically
+through their `Ready` condition, for a chosen set of kinds. The tree stays
+an ownership tree; relations (Service → pods, Ingress → Service, PVC →
+pods) are shown in the detail pane. Kinds with a notion of broken get
+issues; kinds without one show a muted fact (`3 keys`), never `healthy`
+(an amendment to F10 for those kinds). Secret values are hidden unless
+revealed on purpose. A forbidden list marks only its group as `error`.
+**Consequences.** Namespaces get longer; configuration goes last and is
+collapsed with the namespace, and empty groups are hidden. The provider
+needs a list per kind and bounded concurrency across many more requests
+(N2). Which custom resource kinds are shown is still open.

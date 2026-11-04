@@ -52,6 +52,43 @@ broken.
   collapsed and restored when it is expanded again (except after "collapse
   all below", which resets it for the collapsed objects).
 
+### More resource kinds (planned)
+
+See [P14](decisions.md#p14-resources-beyond-workloads) and the
+[planned kinds](state-model.md#planned-kinds) of the state model.
+
+- **F60** Below the workloads, a namespace lists its other resources,
+  grouped by kind like the workloads (F2), in this order: `services`,
+  `ingresses`, `persistentvolumeclaims`, then `configmaps`, `secrets`.
+  Groups without objects are not shown.
+- **F61** Configuration (`configmaps`, `secrets`) comes last: a namespace
+  can hold hundreds of them (Helm keeps one Secret per release revision),
+  and they are for browsing, not for finding problems.
+- **F62** Kinds that can be broken get issues like workloads (Service
+  without endpoints, Ingress without address or with a missing backend,
+  PVC pending or lost). Kinds that can't (ConfigMap, Secret) show a muted
+  fact instead of `healthy` (`3 keys`), which would claim a check that never
+  ran. Services, Ingresses and PVCs show a muted fact when they are fine
+  (type and endpoints, hosts, size and storage class).
+- **F63** Relations between resources are shown in the detail pane, not as
+  tree levels: a Service names the pods it selects and their workload, an
+  Ingress the Services it routes to, a PVC the pods that mount it. The tree
+  stays an ownership tree, so no object appears twice.
+- **F64** Secret values are never shown unless the user reveals them on
+  purpose, in the detail pane and in the YAML (F26) alike. Keys and sizes
+  are shown.
+- **F65** If listing a kind is forbidden (RBAC), its group shows `error`
+  with the API server's message; the rest of the namespace loads normally.
+- **F66** Cluster-scoped resources: a `nodes` group at the top level, next
+  to the namespaces, with issues per node (not ready, memory, disk or PID
+  pressure, cordoned). PersistentVolumes are reached from their PVC.
+- **F67** Custom resources (CRDs, e.g. OpenShift Routes, cert-manager
+  Certificates, Argo CD Applications) are read generically: their state
+  comes from the `Ready` condition, which most operators set. Only a chosen
+  set of kinds is shown, not every CRD of the cluster; how the set is
+  chosen (config file, kinds with objects in the namespace, picker) is
+  open.
+
 ### State per object
 
 - **F10** Each object shows at most **one** state word: the most severe

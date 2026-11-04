@@ -66,7 +66,29 @@ kind appears at most once; an issue about a container names it.
   below them (`HiddenIssues`), one count per level. An object whose status
   failed to load counts as danger below.
 
+## Planned kinds
+
+Kinds beyond workloads and pods (requirements F60–F67,
+[P14](decisions.md#p14-resources-beyond-workloads)). The issue words and
+levels are a proposal, to be confirmed when they are implemented.
+
+| Kind | Parent | Group header | Issues | Muted fact when fine |
+|---|---|---|---|---|
+| Service | namespace | `services` | `no endpoints` (Warn): has a selector, no ready endpoint | type, `2 endpoints` |
+| Ingress | namespace | `ingresses` | `backend missing` (Danger): a backend Service doesn't exist; `no address` (Warn): no load balancer address yet | hosts |
+| PersistentVolumeClaim | namespace | `persistentvolumeclaims` | `lost` (Danger): its volume is gone; `pending` (Warn): not bound yet | size, storage class |
+| ConfigMap | namespace | `configmaps` | none | `3 keys` |
+| Secret | namespace | `secrets` | none | type, `3 keys` (values hidden, F64) |
+| Node | cluster | `nodes` (top level) | `not ready` (Danger); `pressure` (Warn): memory, disk or PID pressure; `cordoned` (Info): unschedulable | roles, version |
+| custom resource | namespace (or `nodes`' level if cluster-scoped) | its plural, e.g. `certificates` | `not ready` (Warn): `Ready` condition is `False`, with its reason | none |
+
+- A Service with no endpoints because its workload is scaled to zero is
+  quiet, like the workload.
+- A kind without a notion of broken never shows `healthy` (F62): the muted
+  fact says what is known instead.
+
 ## Cluster
 
 The cluster's own status carries only `Created` for now. With the provider
-it gets the nodes (`NotReady`, pressure conditions) as issues of its own.
+the nodes become objects of their own (F66); their issues count below the
+cluster like those of namespaces.

@@ -51,12 +51,16 @@ Next steps, roughly in order:
    load warning events. Bounded concurrency, never block startup.
 2. **Watch** (`resource.Watcher`): informers keep the tree live, so a pod
    that starts crashing shows up without `r`.
-3. **Context and namespace pickers** (`C`, `n`): popups like submarine's
+3. **More resource kinds** (F60–F67, P14), in this order: Services,
+   Ingresses and PVCs (they have real states); ConfigMaps and Secrets (for
+   browsing, values hidden); nodes; custom resources through their `Ready`
+   condition.
+4. **Context and namespace pickers** (`C`, `n`): popups like submarine's
    branch picker, with a dimmed backdrop.
-4. **Read actions**: logs (`v`, the previous container's logs for a
+5. **Read actions**: logs (`v`, the previous container's logs for a
    crashloop), describe (`d`), the YAML of an object and all its events
    (not only warnings), in a pager.
-5. **Write actions**: restart a rollout (`t`), scale (`s`), delete a pod
+6. **Write actions**: restart a rollout (`t`), scale (`s`), delete a pod
    (`x`). Each asks first if something would be lost (submarine D23).
-6. A fixture for integration tests: a `kind` cluster script, like
+7. A fixture for integration tests: a `kind` cluster script, like
    submarine's `scripts/make-fixture.sh`.
