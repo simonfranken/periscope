@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	statusWidth = 16 // "rolling out +1 ·2"
+	statusWidth = 16 // minimum: "rolling out +1"; wider if a visible row needs it
 	readyWidth  = 5  // "10/10"
 	ageWidth    = 4  // "120d"
 )
@@ -357,13 +357,14 @@ func (m Model) View() string {
 		return ""
 	}
 	rows := m.visibleRows()
-	nameColW := m.nameColumnWidth(rows)
+	statusColW := m.statusColumnWidth(rows)
+	nameColW := m.nameColumnWidth(rows, statusColW)
 	lines := make([]string, 0, m.height)
 	for _, r := range rows {
 		if r.kind == rowDir {
 			lines = append(lines, m.dirLine(r))
 		} else {
-			lines = append(lines, m.nodeLine(r, nameColW))
+			lines = append(lines, m.nodeLine(r, nameColW, statusColW))
 		}
 	}
 	if len(rows) == 0 && m.narrowed() {
@@ -382,14 +383,27 @@ func (m Model) View() string {
 // nameColumnWidth is the width of indent + toggle + name for the widest
 // visible row, so the status column sits close to the names. It shrinks to
 // fit the available width.
-func (m Model) nameColumnWidth(rows []row) int {
+func (m Model) nameColumnWidth(rows []row, statusColW int) int {
 	w := 0
 	for _, r := range rows {
 		if r.kind == rowNode {
 			w = max(w, 2*r.depth+3+lipgloss.Width(r.node.Name)+len(m.childCount(r.node)))
 		}
 	}
-	return min(w+2, m.width-statusWidth-readyWidth-ageWidth-3)
+	return min(w+2, m.width-statusColW-readyWidth-ageWidth-3)
+}
+
+// statusColumnWidth is the width of the widest status of the visible rows,
+// at least statusWidth, so a word with "+n" and the hidden counts is never
+// cut. The name column gives way instead.
+func (m Model) statusColumnWidth(rows []row) int {
+	w := statusWidth
+	for _, r := range rows {
+		if r.kind == rowNode {
+			w = max(w, lipgloss.Width(m.status(r.node, lipgloss.NewStyle())))
+		}
+	}
+	return w
 }
 
 func (m Model) childCount(s *resource.Object) string {
@@ -405,7 +419,7 @@ func (m Model) dirLine(r row) string {
 }
 
 // nodeLine renders: indent ▸ name [n] │ status ·k │ ready │ age
-func (m Model) nodeLine(r row, nameColW int) string {
+func (m Model) nodeLine(r row, nameColW, statusColW int) string {
 	t, s := m.theme, r.node
 	base := lipgloss.NewStyle()
 	if s == m.cursor {
@@ -443,10 +457,36 @@ func (m Model) nodeLine(r row, nameColW int) string {
 	name := ansi.Truncate(s.Name, max(nameW-len(count), 1), "…")
 	nameCell := seg(textColor, name) + seg(t.Muted, count) + pad(nameW-lipgloss.Width(name+count))
 
-	// status: the most severe issue as a word, "+n" for further issues, a
-	// muted "healthy" without issues, so an empty cell never looks broken;
-	// a collapsed row adds the issues hidden below it, per level, and then
-	// drops "healthy".
+	status := m.status(s, base)
+	status = ansi.Truncate(status, statusColW, "")
+	status += pad(statusColW - lipgloss.Width(status))
+
+	// ready count and age
+	ready := theme.Ready(s)
+	readyCell := pad(readyWidth-lipgloss.Width(ready)) + seg(textColor, ready)
+	age := ""
+	if s.Status != nil {
+		age = theme.Age(s.Status.Created)
+	}
+	ageCell := pad(ageWidth-lipgloss.Width(age)) + seg(t.Muted, age)
+
+	content := nameCell + pad(1) + status + pad(1) + readyCell + pad(1) + ageCell
+	line := indent + toggle + zone.Mark(m.id+"row:"+s.Path, content)
+	if w := lipgloss.Width(line); w < m.width {
+		line += pad(m.width - w)
+	}
+	return ansi.Truncate(line, m.width, "")
+}
+
+// status renders the status cell of s on base: the most severe issue as a
+// word, "+n" for further issues, a muted "healthy" without issues, so an
+// empty cell never looks broken; a collapsed row adds the issues hidden
+// below it, per level, and then drops "healthy".
+func (m Model) status(s *resource.Object, base lipgloss.Style) string {
+	t := m.theme
+	pad := func(n int) string { return base.Render(strings.Repeat(" ", max(n, 0))) }
+	collapsed := len(s.Children) > 0 && !m.isExpanded(s)
+	quiet := s.Err == nil && s.Status != nil && len(s.Status.Issues()) == 0
 	status := t.StatusWord(s, base, m.spinner)
 	h := s.HiddenIssues()
 	if quiet && collapsed && h.Total() > 0 {
@@ -466,22 +506,5 @@ func (m Model) nodeLine(r row, nameColW int) string {
 			status += t.LevelStyle(c.level, base).Render(fmt.Sprintf("%s%d", t.Glyphs.Problems, c.n))
 		}
 	}
-	status = ansi.Truncate(status, statusWidth, "")
-	status += pad(statusWidth - lipgloss.Width(status))
-
-	// ready count and age
-	ready := theme.Ready(s)
-	readyCell := pad(readyWidth-lipgloss.Width(ready)) + seg(textColor, ready)
-	age := ""
-	if s.Status != nil {
-		age = theme.Age(s.Status.Created)
-	}
-	ageCell := pad(ageWidth-lipgloss.Width(age)) + seg(t.Muted, age)
-
-	content := nameCell + pad(1) + status + pad(1) + readyCell + pad(1) + ageCell
-	line := indent + toggle + zone.Mark(m.id+"row:"+s.Path, content)
-	if w := lipgloss.Width(line); w < m.width {
-		line += pad(m.width - w)
-	}
-	return ansi.Truncate(line, m.width, "")
+	return status
 }

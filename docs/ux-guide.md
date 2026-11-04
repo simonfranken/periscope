@@ -102,11 +102,13 @@ indent ▸ name [n]   status          ready  age
 | indent | 2 per depth | |
 | toggle | 3 | `▸` collapsed, `▾` expanded, blank for leaves |
 | name | fits the widest visible name | name, `[n]` = direct children (collapsed only) |
-| status | 16 | issue word, `+n`, `·k` hidden issues per level (red, yellow, blue); muted `healthy` / `completed` without issues; spinner while loading; `error` |
+| status | the widest visible status, at least 16 | issue word, `+n`, `·k` hidden issues per level (red, yellow, blue); muted `healthy` / `completed` without issues; spinner while loading; `error` |
 | ready | 5, right-aligned | `ready/desired` replicas of a workload, `ready/total` containers of a pod |
 | age | 4, right-aligned, muted | like kubectl: `40s`, `25m`, `3h`, `12d` |
 
 - The name column is only as wide as needed, so states stay close to names.
+  The status column is never cut (`degraded +1 ·1 ·1`): if space is short,
+  the names give way and are cut with `…`.
 - Group headers (`deployments`, `statefulsets`) are muted and not
   selectable.
 - Rows without issues: name and counts muted (except the selected row),

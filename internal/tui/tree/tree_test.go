@@ -1,10 +1,13 @@
 package tree
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone"
 
 	"periscope/internal/resource"
@@ -495,4 +498,21 @@ func TestRefitMovesSelectionWhenProblemDisappears(t *testing.T) {
 	m.roots[0].Status.Phase = ""
 	m.Refit()
 	assertCursor(t, m, "f")
+}
+
+func TestStatusColumnFitsWidestStatus(t *testing.T) {
+	m := newTree(t)
+	b := m.roots[1]
+	// "rolling out +1 ·1 ·1 ·1" is wider than the minimum column
+	b.Status = &resource.Status{Desired: 3, Ready: 3, Updated: 1, Suspended: true}
+	b.Children[0].Err = errors.New("forbidden")
+	b.Children[1].Status = &resource.Status{Desired: 2, Ready: 1, Updated: 2}
+	b.Children[0].Children[0].Status = &resource.Status{Terminating: true}
+	want := ansi.Strip(m.status(b, lipgloss.NewStyle()))
+	if lipgloss.Width(want) <= statusWidth {
+		t.Fatalf("fixture status %q fits the minimum width, test proves nothing", want)
+	}
+	if !strings.Contains(ansi.Strip(m.View()), want) {
+		t.Fatalf("view cuts the status %q:\n%s", want, ansi.Strip(m.View()))
+	}
 }
