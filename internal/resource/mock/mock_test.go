@@ -21,6 +21,9 @@ func TestMockShowsEveryIssue(t *testing.T) {
 			t.Errorf("duplicate path %q", o.Path)
 		}
 		paths[o.Path] = true
+		if o.Kind == resource.KindSection {
+			return // no state of its own, never loaded
+		}
 		st, ok := p.statuses[o.Path]
 		if !ok {
 			t.Errorf("no status for %q", o.Path)

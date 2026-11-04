@@ -55,10 +55,11 @@ type Provider interface {
 ```
 
 - `Tree` returns the cluster and all objects with `Parent` and `Children`
-  linked and `Group` set, in the order of `resource.Arrange` (which also
-  sets the custom resources' headers). `Cluster.Objects` is the top level:
-  namespaces, then cluster-scoped objects. `Status` fields are nil.
-- `Status` is called once per object, concurrently. It must be safe to call
+  linked and `Group` set, passed through `resource.Arrange` (display order;
+  custom resources moved into `custom resources` sections). `Cluster.Objects`
+  is the top level: namespaces, then the section of cluster-scoped custom
+  resources. `Status` fields are nil, except the sections' (empty).
+- `Status` is called once per object except sections, concurrently. It must be safe to call
   concurrently and must respect `ctx`.
 - `Object.Path` is the unique ID (see
   [state-model.md](state-model.md#objects)).

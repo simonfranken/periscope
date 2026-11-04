@@ -116,11 +116,13 @@ func QuietText(o *resource.Object) string {
 
 // StatusWord renders the state of o as one word: a spinner while loading,
 // `error`, the most severe issue with "+n" for further ones, or a muted
-// healthy word. base is applied to every segment, e.g. to keep a row
-// background.
+// healthy word; nothing for a section. base is applied to every segment,
+// e.g. to keep a row background.
 func (t Theme) StatusWord(o *resource.Object, base lipgloss.Style, spinner string) string {
 	seg := func(c lipgloss.TerminalColor, text string) string { return base.Foreground(c).Render(text) }
 	switch {
+	case o.Kind == resource.KindSection:
+		return "" // no state of its own; collapsed, the tree adds the counts below
 	case o.Err != nil:
 		return t.LevelStyle(resource.LevelDanger, base).Render("error")
 	case o.Status == nil:

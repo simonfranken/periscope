@@ -112,6 +112,10 @@ indent ▸ name [n]   status          ready  age
   the names give way and are cut with `…`.
 - Group headers (`deployments`, `statefulsets`) are muted and not
   selectable.
+- A section (`custom resources`) is a selectable, collapsible row like a
+  namespace, collapsed on start. It has no state of its own, so its status
+  cell is empty unless it is collapsed with issues below (`·1`); `[n]`
+  counts its objects.
 - Rows without issues: name and counts muted (except the selected row),
   status `healthy` in muted grey. An empty cell would look like missing
   data; the muted word confirms the check ran.
@@ -143,6 +147,11 @@ indent ▸ name [n]   status          ready  age
 
 For the cluster (header selected): `Server`, `Version`, `Namespaces`
 (count and the issues below) and `Issues below`.
+
+For a section: its namespace (or `cluster`) and name, `Objects` (count and
+the issues below, or `no issues`), `Kinds` (objects per kind header) and
+`Issues below`. No palette: a section has nothing to act on, and `c` copies
+nothing.
 
 ### Header
 

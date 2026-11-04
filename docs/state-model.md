@@ -12,13 +12,17 @@ words and colors in `internal/tui/theme`.
 | namespace | cluster | `shop` | none |
 | Deployment, StatefulSet, DaemonSet, Job, CronJob | namespace | `shop/deployment/api` | `deployments`, … |
 | pod | its workload | `shop/deployment/api/pod/api-7b8d9f6c5-zp6qx` | none |
-| custom resource | namespace | `shop/certificate.cert-manager.io/api-tls` | `custom resources`, then its plural: `certificates` |
-| custom resource, cluster-scoped | cluster (top level) | `clusterissuer.cert-manager.io/letsencrypt` | as above |
+| section `custom resources` | namespace, or the top level | `shop/custom resources`, `custom resources` | none |
+| custom resource | the section of its namespace | `shop/certificate.cert-manager.io/api-tls` | its plural: `certificates` |
+| custom resource, cluster-scoped | the top-level section | `clusterissuer.cert-manager.io/letsencrypt` | as above |
 
-A path is the parent's path, `/`, and the object's kubectl ref (`Ref`:
-`deployment/api`, `certificate.cert-manager.io/api-tls`). `resource.Arrange`
-puts every provider's tree into display order and sets the custom
-resources' headers (F67).
+A path is the namespace's path, `/`, and the object's kubectl ref (`Ref`:
+`deployment/api`, `certificate.cert-manager.io/api-tls`); a pod's adds its
+own to its workload's. A custom resource's path doesn't name its section,
+which is a tree node only. `resource.Arrange` puts every provider's tree
+into display order, moves the custom resources into their sections and
+sets their headers (F67). A section has no state of its own: it gets an
+empty `Status`, is never loaded, and shows no state word.
 
 A Deployment's pods belong to it through its ReplicaSets, which are not
 shown: they are an implementation detail of a rollout. A Job created by a

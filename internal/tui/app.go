@@ -222,6 +222,9 @@ func (m Model) treeLoaded(msg treeLoadedMsg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	track := func(o *resource.Object) {
 		m.byPath[o.Path] = o
+		if o.Kind == resource.KindSection {
+			return // no state of its own: Arrange gave it an empty one
+		}
 		if p, ok := old[o.Path]; ok {
 			o.Status, o.Err = p.Status, p.Err
 		}
@@ -386,8 +389,8 @@ func (m Model) problemsView() string {
 // or the context for the cluster.
 func (m Model) copyName() (tea.Model, tea.Cmd) {
 	o := m.tree.Selected()
-	if o == nil {
-		return m, nil
+	if o == nil || o.Kind == resource.KindSection {
+		return m, nil // a section has no name kubectl knows
 	}
 	name := o.Ref()
 	if o.IsRoot() && m.cluster != nil {

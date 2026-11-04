@@ -60,7 +60,7 @@ func (m Model) View(o *resource.Object, c *resource.Cluster) string {
 	}
 	height := m.height
 	var palette []string
-	if m.PaletteVisible() {
+	if m.PaletteVisible() && (o == nil || o.Kind != resource.KindSection) { // nothing to act on
 		palette = m.palette()
 		height -= len(palette) // the palette is at the bottom
 	}
@@ -104,7 +104,12 @@ func (m Model) lines(o *resource.Object, c *resource.Cluster) []string {
 
 	root := o.IsRoot() && c != nil
 	where := o.TypeName()
-	if o.Namespace != "" {
+	switch {
+	case o.Kind == resource.KindSection && o.Namespace == "":
+		where = "cluster"
+	case o.Kind == resource.KindSection:
+		where = o.Namespace
+	case o.Namespace != "":
 		where = o.Namespace + " · " + where
 	}
 	name := o.Name
@@ -112,6 +117,9 @@ func (m Model) lines(o *resource.Object, c *resource.Cluster) []string {
 		name = c.Context
 	}
 	out := []string{muted.Render(where), text.Bold(true).Render(name), ""}
+	if o.Kind == resource.KindSection {
+		return append(out, m.sectionLines(o)...)
+	}
 
 	switch {
 	case o.Err != nil:
@@ -281,6 +289,33 @@ func (m Model) conditionLines(st *resource.Status, issues []resource.Issue) []st
 		}
 	}
 	return out
+}
+
+// sectionLines summarize a section: how many objects, the issues below
+// them, and the objects per kind header.
+func (m Model) sectionLines(o *resource.Object) []string {
+	t := m.theme
+	muted, text := theme.Fg(t.Muted), theme.Fg(t.Text)
+	count := fmt.Sprintf("%d", len(o.Children))
+	below := o.HiddenIssues()
+	if parts := m.hiddenParts(below); parts != "" {
+		count += muted.Render(" · ") + parts + muted.Render(" below")
+	} else {
+		count += muted.Render(" · no issues")
+	}
+	out := []string{muted.Width(labelWidth).Render("Objects") + count, "", muted.Bold(true).Render("Kinds")}
+	var kinds []string
+	perKind := map[string]int{}
+	for _, c := range o.Children {
+		if perKind[c.Group] == 0 {
+			kinds = append(kinds, c.Group)
+		}
+		perKind[c.Group]++
+	}
+	for _, k := range kinds {
+		out = append(out, text.Render(fmt.Sprintf("%3d ", perKind[k]))+muted.Render(k))
+	}
+	return append(out, m.issuesBelow(o.Children)...)
 }
 
 func childLabel(o *resource.Object) string {

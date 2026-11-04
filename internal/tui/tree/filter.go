@@ -132,9 +132,11 @@ func (m *Model) reselect(old *resource.Object) {
 // appendAll lists every object in display order, whatever is expanded or
 // filtered.
 func (m *Model) appendAll(out *[]row, mods []*resource.Object, depth int) {
-	for _, s := range displayOrder(mods, "") {
-		*out = append(*out, row{kind: rowNode, depth: depth, node: s})
-		m.appendAll(out, s.Children, depth+1)
+	for _, g := range groupByDir(mods) {
+		for _, s := range g.mods {
+			*out = append(*out, row{kind: rowNode, depth: depth, node: s})
+			m.appendAll(out, s.Children, depth+1)
+		}
 	}
 }
 

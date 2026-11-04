@@ -40,8 +40,8 @@ broken.
   header (`deployments`, `statefulsets`, …), in that order.
 - **F3** *(planned)* Pods without an owning workload are listed under a
   `pods` header of their namespace.
-- **F4** On startup only the top level is shown: the namespaces, collapsed,
-  then the cluster-scoped objects below their headers (F67).
+- **F4** On startup only the top level is shown, collapsed: the namespaces,
+  then the section of cluster-scoped custom resources (F67).
 - **F5** A collapsed object shows the number of its **direct** children,
   e.g. `[2]`.
 - **F6** A collapsed object shows the number of issues **hidden** in all
@@ -83,16 +83,21 @@ See [P14](decisions.md#p14-resources-beyond-workloads) and the
 - **F66** Cluster-scoped resources: a `nodes` group at the top level, next
   to the namespaces, with issues per node (not ready, memory, disk or PID
   pressure, cordoned). PersistentVolumes are reached from their PVC.
-- **F67** *(UI implemented)* Custom resources (CRDs, e.g. OpenShift Routes, cert-manager
-  Certificates, Argo CD Applications) are listed under a `custom resources`
-  header of their namespace, with one header per kind below it (its plural,
-  e.g. `certificates`), ordered alphabetically. A kind is shown in a
+- **F67** *(UI implemented)* Custom resources (CRDs, e.g. OpenShift
+  Routes, cert-manager Certificates, Argo CD Applications) are listed in a
+  `custom resources` **section** of their namespace: a selectable row that
+  is collapsed until it is expanded, like a namespace, with `[n]` and the
+  issues below it when collapsed, but no state word of its own. Inside it,
+  one header per kind (its plural, e.g. `certificates`), ordered
+  alphabetically. Selected, the detail pane shows the number of objects,
+  the objects per kind and the issues below. A kind is shown in a
   namespace only if it has objects there, so CRDs that are installed but
   unused cost no rows. If two kinds share a plural, their API group is
   added (`applications argoproj.io`); whether plurals collide is decided
   over the whole cluster, so a kind has the same header in every namespace.
   Cluster-scoped custom resources get the same section at the top level,
-  after the namespaces (and `nodes`, F66). Their state comes from the
+  after the namespaces (and `nodes`, F66), so a cluster with thousands of
+  them still starts with one row for them. Their state comes from the
   `Ready` condition, which most operators set: `False` is `not ready`;
   without a Ready condition the muted word is `unchecked`, not `healthy`
   (F62). The detail pane lists all conditions. There is no configuration:

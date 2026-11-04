@@ -5,10 +5,21 @@ import (
 	"testing"
 )
 
-func TestArrangeOrdersCustomResourcesAfterWorkloads(t *testing.T) {
-	cert := &Type{Kind: "Certificate", Plural: "certificates", Group: "cert-manager.io"}
-	route := &Type{Kind: "Route", Plural: "routes", Group: "route.openshift.io"}
-	ns := &Object{Kind: KindNamespace, Name: "shop", Children: []*Object{
+var (
+	cert  = &Type{Kind: "Certificate", Plural: "certificates", Group: "cert-manager.io"}
+	route = &Type{Kind: "Route", Plural: "routes", Group: "route.openshift.io"}
+)
+
+func names(objs []*Object) string {
+	var out []string
+	for _, o := range objs {
+		out = append(out, o.Group+":"+o.Name)
+	}
+	return strings.Join(out, " ")
+}
+
+func TestArrangeMovesCustomResourcesIntoSection(t *testing.T) {
+	ns := &Object{Kind: KindNamespace, Name: "shop", Path: "shop", Children: []*Object{
 		{Kind: KindCustom, Type: route, Name: "web"},
 		{Kind: KindCustom, Type: cert, Name: "z-tls"},
 		{Kind: KindCronJob, Name: "report", Group: "cronjobs"},
@@ -17,18 +28,29 @@ func TestArrangeOrdersCustomResourcesAfterWorkloads(t *testing.T) {
 		{Kind: KindDeployment, Name: "api", Group: "deployments"},
 	}}
 	Arrange([]*Object{ns})
-	var got []string
-	for _, o := range ns.Children {
-		got = append(got, o.Group+":"+o.Name)
+	// provider order kept within a built-in kind; the section last
+	if got, want := names(ns.Children), "deployments:web deployments:api cronjobs:report :custom resources"; got != want {
+		t.Fatalf("namespace = %v, want %v", got, want)
 	}
-	want := []string{
-		"deployments:web", "deployments:api", // provider order kept
-		"cronjobs:report",
-		"custom resources/certificates:a-tls", "custom resources/certificates:z-tls",
-		"custom resources/routes:web",
+	s := ns.Children[3]
+	if s.Kind != KindSection || s.Path != "shop/custom resources" || s.Namespace != "shop" || s.Parent != ns || s.Status == nil {
+		t.Fatalf("section = %+v", s)
 	}
-	if strings.Join(got, " ") != strings.Join(want, " ") {
-		t.Fatalf("order = %v, want %v", got, want)
+	if got, want := names(s.Children), "certificates:a-tls certificates:z-tls routes:web"; got != want {
+		t.Fatalf("section = %v, want %v", got, want)
+	}
+	for _, c := range s.Children {
+		if c.Parent != s {
+			t.Errorf("%s: parent is not the section", c.Name)
+		}
+	}
+}
+
+func TestArrangeWithoutCustomResourcesAddsNoSection(t *testing.T) {
+	ns := &Object{Kind: KindNamespace, Name: "shop", Children: []*Object{{Kind: KindDeployment, Name: "api"}}}
+	top := Arrange([]*Object{ns})
+	if len(top) != 1 || len(ns.Children) != 1 {
+		t.Fatalf("top = %d objects, namespace = %d children, want 1 and 1", len(top), len(ns.Children))
 	}
 }
 
@@ -40,23 +62,25 @@ func TestArrangeAddsAPIGroupToSharedPlurals(t *testing.T) {
 	a := &Object{Kind: KindNamespace, Name: "argocd", Children: []*Object{{Kind: KindCustom, Type: argo, Name: "shop"}}}
 	b := &Object{Kind: KindNamespace, Name: "shop", Children: []*Object{{Kind: KindCustom, Type: sig, Name: "store"}}}
 	Arrange([]*Object{a, b})
-	if g := a.Children[0].Group; g != "custom resources/applications argoproj.io" {
+	if g := a.Children[0].Children[0].Group; g != "applications argoproj.io" {
 		t.Errorf("argo group = %q", g)
 	}
-	if g := b.Children[0].Group; g != "custom resources/applications app.k8s.io" {
+	if g := b.Children[0].Children[0].Group; g != "applications app.k8s.io" {
 		t.Errorf("sig group = %q", g)
 	}
 }
 
-func TestArrangePutsClusterScopedAfterNamespaces(t *testing.T) {
+func TestArrangePutsClusterScopedSectionAfterNamespaces(t *testing.T) {
 	issuer := &Type{Kind: "ClusterIssuer", Plural: "clusterissuers", Group: "cert-manager.io"}
-	top := []*Object{
+	top := Arrange([]*Object{
 		{Kind: KindCustom, Type: issuer, Name: "letsencrypt"},
 		{Kind: KindNamespace, Name: "shop"},
+	})
+	if len(top) != 2 || top[0].Kind != KindNamespace || top[1].Kind != KindSection || top[1].Path != "custom resources" || top[1].Parent != nil {
+		t.Fatalf("top = %v", names(top))
 	}
-	Arrange(top)
-	if top[0].Kind != KindNamespace || top[1].Group != "custom resources/clusterissuers" {
-		t.Fatalf("top = %v %q, want the namespace first", top[0].Kind, top[1].Group)
+	if g := top[1].Children[0].Group; g != "clusterissuers" {
+		t.Errorf("issuer group = %q", g)
 	}
 }
 

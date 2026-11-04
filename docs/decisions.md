@@ -175,7 +175,7 @@ whose backend is gone, a PVC that never binds, a node that is not ready.
 **Decision.** periscope shows more kinds, as further groups of a namespace
 after the workloads: Services, Ingresses, PVCs, then ConfigMaps and
 Secrets; nodes as a group at the top level; custom resources generically
-through their `Ready` condition, under a `custom resources` header with one
+through their `Ready` condition, in a collapsible `custom resources` section with one
 header per kind, alphabetically, only for kinds that have objects in the
 namespace. periscope has no configuration file: what is shown follows from
 the cluster, so it works the same on every machine and nothing needs
@@ -191,8 +191,13 @@ needs a list per kind and bounded concurrency across many more requests
 (N2). Custom resources need discovery of the installed CRDs and one list
 per kind across all namespaces (not one per namespace), filtered into the
 namespaces; kinds with no objects add no rows.
-**Custom resources, as implemented.** Headers nest (`Group` holds
-`custom resources/certificates`). Whether two kinds share a plural is
+**Custom resources, as implemented.** `custom resources` is a section, a
+tree node of its own (`KindSection`) that `resource.Arrange` creates in each
+namespace and at the top level, not a header: headers can't be selected or
+collapsed, and a cluster with hundreds of cluster-scoped custom resources
+(Crossplane, Kyverno, Karpenter) would otherwise push the namespaces off the
+first screen. It starts collapsed like any object; it has no state word of
+its own, since it isn't a resource. Whether two kinds share a plural is
 decided over the whole cluster, so a kind's header doesn't change between
 namespaces. Without a Ready condition the muted word is `unchecked`: we
 can't tell, so we don't say `healthy`. Conditions are read only for custom

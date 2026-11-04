@@ -10,7 +10,7 @@ import (
 
 // Kind is the kind of an object in the tree. The constants are in display
 // order (Arrange sorts by them): new kinds go where F60 lists them, e.g.
-// Services before KindCustom, ConfigMaps and Secrets after it.
+// Services before KindSection, ConfigMaps and Secrets after it.
 type Kind int
 
 const (
@@ -22,7 +22,8 @@ const (
 	KindJob
 	KindCronJob
 	KindPod
-	KindCustom // a custom resource; Object.Type says which
+	KindSection // a collapsible section of its parent, e.g. "custom resources"; it has no state of its own
+	KindCustom  // a custom resource; Object.Type says which
 )
 
 // Name is the lower-case singular name kubectl uses, e.g. "deployment".
@@ -42,6 +43,8 @@ func (k Kind) Name() string {
 		return "job"
 	case KindCronJob:
 		return "cronjob"
+	case KindSection:
+		return "section"
 	case KindCustom:
 		return "custom resource"
 	default:
@@ -82,11 +85,11 @@ type Object struct {
 	Name      string
 	// Path is the unique ID: "<namespace>", "<namespace>/<ref>",
 	// "<namespace>/<ref>/pod/<pod>", "<ref>" for a cluster-scoped object
-	// (see Ref); "" for the cluster.
+	// (see Ref); a section's is "<parent>/<name>" ("custom resources" at the
+	// top level); "" for the cluster.
 	Path string
 	// Group is the header the object is listed under within its parent
-	// (e.g. "deployments"); "" lists it without one. A "/" nests headers:
-	// "custom resources/certificates".
+	// (e.g. "deployments"); "" lists it without one.
 	Group    string
 	Parent   *Object
 	Children []*Object

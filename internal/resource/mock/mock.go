@@ -245,7 +245,7 @@ func fixture(statuses map[string]*resource.Status, now time.Time) *resource.Clus
 		b.namespace("legacy-feature", &resource.Status{Created: ago(400 * 24 * time.Hour), Terminating: true}),
 		b.clusterScoped(b.custom(clusterIssuer, "letsencrypt", ready("ACMEAccountRegistered", "The ACME account was registered with the ACME server"))),
 	}
-	resource.Arrange(objects)
+	objects = resource.Arrange(objects)
 
 	root := &resource.Object{Kind: resource.KindCluster, Name: "kind-dev"}
 	statuses[""] = &resource.Status{Created: ago(120 * 24 * time.Hour)}
