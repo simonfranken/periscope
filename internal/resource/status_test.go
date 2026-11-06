@@ -50,6 +50,14 @@ func TestIssues(t *testing.T) {
 		}}, []IssueKind{IssueNotReady}},
 		{"failed", &Status{Phase: PhaseFailed}, []IssueKind{IssueFailed}},
 		{"succeeded", &Status{Phase: PhaseSucceeded}, nil},
+		{"service with endpoints", &Status{Selector: "app=web", Endpoints: 2}, nil},
+		{"service without endpoints", &Status{Selector: "app=web"}, []IssueKind{IssueNoEndpoints}},
+		{"service of a workload scaled to zero", &Status{Selector: "app=web", Idle: true}, nil},
+		{"service without selector", &Status{Type: "ClusterIP"}, nil},
+		{"ingress", &Status{Hosts: []string{"*"}, Addresses: []string{"10.0.0.1"}, Backends: []Backend{{Service: "web"}}}, nil},
+		{"ingress with a missing backend, no address", &Status{Hosts: []string{"*"}, Backends: []Backend{{Service: "web"}, {Service: "gone", Missing: true}}},
+			[]IssueKind{IssueBackendMissing, IssueNoAddress}},
+		{"configmap", &Status{Keys: []Key{{Name: "a", Size: 1}}}, nil},
 	}
 	for _, c := range cases {
 		got := kinds(c.s.Issues())

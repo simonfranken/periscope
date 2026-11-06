@@ -41,7 +41,9 @@ Installs `periscope` and the alias `peri` (linux/macOS, amd64/arm64) to
 (`internal/resource/kube`, client-go, P5, P17) reads the kubeconfig like
 kubectl (`--context`, `KUBECONFIG`, exec plugins without prompting), lists
 namespaces, workloads and pods (pods without a workload under `pods`, F3;
-Jobs of a CronJob below it), maps them to `resource.Status` and loads the
+Jobs of a CronJob below it), Services, Ingresses, OpenShift Routes,
+ConfigMaps and Secrets (values never kept, P21), maps them to
+`resource.Status` and loads the
 warning events. If listing namespaces is forbidden, the context's
 namespace is the only one (F4). The context picker (`C`) switches between
 the kubeconfig's contexts. The UI: the cluster level and opening
@@ -61,11 +63,11 @@ Next steps, roughly in order:
    as `crashloop` (state model).
 2. **Watch** (`resource.Watcher`): informers keep the tree live, so a pod
    that starts crashing shows up without `r`.
-3. **More resource kinds** (F60–F67, P14), in this order: Services,
-   Ingresses and PVCs (they have real states); ConfigMaps and Secrets (for
-   browsing, values hidden); nodes; discovering the custom resources (the
-   UI for them is done). With them, a kind whose list is forbidden shows
-   `error` (F65); for now it is left out.
+3. **More resource kinds** (F60–F67, P14). Done: Services, Ingresses,
+   Routes, ConfigMaps and Secrets (P21). Next: PVCs; nodes; discovering
+   the custom resources (the UI for them is done, skipping Routes). With
+   them, a kind whose list is forbidden shows `error` (F65); for now it
+   is left out.
 4. **Read actions**: describe (`d`), the YAML of an object and all its
    events (not only warnings), in a pager. Logs are done (P19); merging
    all containers of a pod into one log could follow.

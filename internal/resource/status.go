@@ -20,33 +20,37 @@ const (
 type IssueKind int
 
 const (
-	IssueDown        IssueKind = iota // a workload with no ready replica
-	IssueCrashLoop                    // a container restarts over and over
-	IssueOOMKilled                    // a container ran out of memory
-	IssuePullError                    // an image can't be pulled
-	IssueFailed                       // a pod or job failed
-	IssuePending                      // a pod is not scheduled or not started
-	IssueNotReady                     // a running pod with a container not ready, or a custom resource whose Ready is False
-	IssueDegraded                     // a workload with fewer ready replicas than desired
-	IssueRestarting                   // a container restarted recently
-	IssueRollingOut                   // a workload is updating its replicas
-	IssueSuspended                    // a CronJob or Job is suspended
-	IssueTerminating                  // a namespace is being deleted
+	IssueDown           IssueKind = iota // a workload with no ready replica
+	IssueCrashLoop                       // a container restarts over and over
+	IssueOOMKilled                       // a container ran out of memory
+	IssuePullError                       // an image can't be pulled
+	IssueFailed                          // a pod or job failed
+	IssueBackendMissing                  // an Ingress or Route routes to a Service that doesn't exist
+	IssuePending                         // a pod is not scheduled or not started
+	IssueNotReady                        // a running pod with a container not ready, or a custom resource whose Ready is False
+	IssueDegraded                        // a workload with fewer ready replicas than desired
+	IssueNoEndpoints                     // a Service with a selector and no ready endpoint
+	IssueNoAddress                       // an Ingress without an address, a Route no router admitted
+	IssueRestarting                      // a container restarted recently
+	IssueRollingOut                      // a workload is updating its replicas
+	IssueSuspended                       // a CronJob or Job is suspended
+	IssueTerminating                     // a namespace is being deleted
 )
 
 // Kinds lists every issue kind, most severe first.
 var Kinds = []IssueKind{
 	IssueDown, IssueCrashLoop, IssueOOMKilled, IssuePullError, IssueFailed,
-	IssuePending, IssueNotReady, IssueDegraded, IssueRestarting,
-	IssueRollingOut, IssueSuspended, IssueTerminating,
+	IssueBackendMissing, IssuePending, IssueNotReady, IssueDegraded,
+	IssueNoEndpoints, IssueNoAddress, IssueRestarting, IssueRollingOut,
+	IssueSuspended, IssueTerminating,
 }
 
 // Level is the level of an issue kind.
 func (k IssueKind) Level() Level {
 	switch k {
-	case IssueDown, IssueCrashLoop, IssueOOMKilled, IssuePullError, IssueFailed:
+	case IssueDown, IssueCrashLoop, IssueOOMKilled, IssuePullError, IssueFailed, IssueBackendMissing:
 		return LevelDanger
-	case IssuePending, IssueNotReady, IssueDegraded, IssueRestarting:
+	case IssuePending, IssueNotReady, IssueDegraded, IssueNoEndpoints, IssueNoAddress, IssueRestarting:
 		return LevelWarn
 	default:
 		return LevelInfo
@@ -131,6 +135,19 @@ func (s *Status) Issues() []Issue {
 
 	if r := s.ReadyCondition(); r != nil && r.Status == "False" {
 		add(IssueNotReady, "")
+	}
+
+	// Services, Ingresses and Routes
+	if s.Selector != "" && s.Endpoints == 0 && !s.Idle {
+		add(IssueNoEndpoints, "")
+	}
+	for _, b := range s.Backends {
+		if b.Missing {
+			add(IssueBackendMissing, "")
+		}
+	}
+	if len(s.Hosts) > 0 && len(s.Addresses) == 0 {
+		add(IssueNoAddress, "")
 	}
 
 	slices.SortStableFunc(out, func(a, b Issue) int { return int(a.Kind) - int(b.Kind) })

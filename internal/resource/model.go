@@ -9,8 +9,8 @@ import (
 )
 
 // Kind is the kind of an object in the tree. The constants are in display
-// order (Arrange sorts by them): new kinds go where F60 lists them, e.g.
-// Services before KindSection, ConfigMaps and Secrets after it.
+// order (Arrange sorts by them), as F60 lists them: the network kinds before
+// KindSection, ConfigMaps and Secrets after it.
 type Kind int
 
 const (
@@ -22,8 +22,13 @@ const (
 	KindJob
 	KindCronJob
 	KindPod
+	KindService
+	KindIngress
+	KindRoute   // an OpenShift Route (route.openshift.io), the Ingress of OpenShift
 	KindSection // a collapsible section of its parent, e.g. "custom resources"; it has no state of its own
-	KindCustom  // a custom resource; Object.Type says which
+	KindConfigMap
+	KindSecret
+	KindCustom // a custom resource; Object.Type says which
 )
 
 // Name is the lower-case singular name kubectl uses, e.g. "deployment".
@@ -43,17 +48,32 @@ func (k Kind) Name() string {
 		return "job"
 	case KindCronJob:
 		return "cronjob"
+	case KindPod:
+		return "pod"
+	case KindService:
+		return "service"
+	case KindIngress:
+		return "ingress"
+	case KindRoute:
+		return "route"
+	case KindConfigMap:
+		return "configmap"
+	case KindSecret:
+		return "secret"
 	case KindSection:
 		return "section"
-	case KindCustom:
-		return "custom resource"
 	default:
-		return "pod"
+		return "custom resource"
 	}
 }
 
 // Plural is the name of a group of objects of this kind, e.g. "deployments".
-func (k Kind) Plural() string { return k.Name() + "s" }
+func (k Kind) Plural() string {
+	if k == KindIngress {
+		return "ingresses"
+	}
+	return k.Name() + "s"
+}
 
 // Cluster is the result of Provider.Tree: the context and its objects.
 type Cluster struct {
@@ -79,8 +99,8 @@ type Type struct {
 // Name is the kubectl name of the type, e.g. "certificate.cert-manager.io".
 func (t Type) Name() string { return strings.ToLower(t.Kind) + "." + t.Group }
 
-// Object is a node of the tree: a namespace, a workload, a pod or a
-// custom resource.
+// Object is a node of the tree: a namespace, a workload, a pod, a Service,
+// Ingress, Route, ConfigMap or Secret, or a custom resource.
 type Object struct {
 	Kind      Kind
 	Type      *Type  // the custom resource's type, nil for other kinds
@@ -137,12 +157,48 @@ type Status struct {
 	// (the kubectl.kubernetes.io/default-container annotation), "" if unset.
 	DefaultContainer string
 
+	// Services: the type (ClusterIP, NodePort, LoadBalancer, ExternalName)
+	// and selector ("app=web", "" for none). Endpoints counts the ready
+	// endpoints of its EndpointSlices; Idle is set if it has none because
+	// every workload it selects is scaled to zero. Targets are the workloads
+	// (and bare pods) it selects, as refs ("deployment/web").
+	// Secrets: Type is the secret's type, e.g. "kubernetes.io/tls".
+	Type      string
+	Selector  string
+	Endpoints int
+	Idle      bool
+	Targets   []string
+
+	// Ingresses and Routes: the hosts they serve, the addresses they are
+	// reachable at (a load balancer's, the routers' that admitted a Route),
+	// the Services they route to. Rejected is why a router rejected a Route.
+	Hosts     []string
+	Addresses []string
+	Backends  []Backend
+	Rejected  string
+
+	// ConfigMaps and Secrets: their keys and the size of each value; the
+	// values themselves are never read into a Status (F64).
+	Keys []Key
+
 	// Custom resources only: status.conditions. Pods and workloads carry
 	// their state in the fields above, so their conditions are not read.
 	Conditions []Condition
 
 	// Warning events about the object, newest first.
 	Events []Event
+}
+
+// Backend is a Service an Ingress or Route routes to.
+type Backend struct {
+	Service string
+	Missing bool // the Service doesn't exist in the namespace
+}
+
+// Key is a key of a ConfigMap or Secret and the size of its value in bytes.
+type Key struct {
+	Name string
+	Size int
 }
 
 // Condition is one entry of a custom resource's status.conditions.

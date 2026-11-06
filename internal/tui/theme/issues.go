@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"periscope/internal/resource"
 )
@@ -33,12 +34,18 @@ func IssueWord(k resource.IssueKind) string {
 		return "pull error"
 	case resource.IssueFailed:
 		return "failed"
+	case resource.IssueBackendMissing:
+		return "backend missing"
 	case resource.IssuePending:
 		return "pending"
 	case resource.IssueNotReady:
 		return "not ready"
 	case resource.IssueDegraded:
 		return "degraded"
+	case resource.IssueNoEndpoints:
+		return "no endpoints"
+	case resource.IssueNoAddress:
+		return "no address"
 	case resource.IssueRestarting:
 		return "restarting"
 	case resource.IssueRollingOut:
@@ -67,6 +74,14 @@ func IssueText(is resource.Issue, s *resource.Status) string {
 		return "image can't be pulled" + in
 	case resource.IssueFailed:
 		return "ran and failed"
+	case resource.IssueBackendMissing:
+		var missing []string
+		for _, b := range s.Backends {
+			if b.Missing {
+				missing = append(missing, b.Service)
+			}
+		}
+		return "no Service " + strings.Join(missing, ", ")
 	case resource.IssuePending:
 		return "not scheduled or not started yet"
 	case resource.IssueNotReady:
@@ -78,6 +93,13 @@ func IssueText(is resource.Issue, s *resource.Status) string {
 		return fmt.Sprintf("only %d of %d replicas ready", s.Ready, s.Desired)
 	case resource.IssueRestarting:
 		return "restarted in the last hour" + in
+	case resource.IssueNoEndpoints:
+		return "no ready endpoint for " + s.Selector
+	case resource.IssueNoAddress:
+		if s.Rejected != "" {
+			return "rejected by the router" + reason(s.Rejected)
+		}
+		return "no address yet, no controller or router admitted it"
 	case resource.IssueRollingOut:
 		return fmt.Sprintf("%d of %d replicas updated", s.Updated, s.Desired)
 	case resource.IssueSuspended:
@@ -94,8 +116,16 @@ func reason(r string) string {
 	return " (" + r + ")"
 }
 
-// QuietWord is the muted word for an object without issues.
+// maxFact is the longest muted fact, so a long host doesn't widen the
+// status column at the names' expense.
+const maxFact = 24
+
+// QuietWord is the muted word for an object without issues: healthy, or a
+// fact about it (F62) for the kinds that show one, e.g. "3 keys".
 func QuietWord(o *resource.Object) string {
+	if f := Fact(o); f != "" {
+		return ansi.Truncate(f, maxFact, "…")
+	}
 	s := o.Status
 	switch {
 	case o.Kind == resource.KindCustom && s.ReadyCondition() == nil:
@@ -106,9 +136,51 @@ func QuietWord(o *resource.Object) string {
 	return Healthy
 }
 
-// QuietText explains the quiet word in the detail pane.
+// Fact is what the tree shows for a Service, Ingress, Route, ConfigMap or
+// Secret without issues: its endpoints, its first host, its keys; "" for
+// other kinds.
+func Fact(o *resource.Object) string {
+	s := o.Status
+	if s == nil {
+		return ""
+	}
+	switch o.Kind {
+	case resource.KindService:
+		switch {
+		case s.Type == "ExternalName":
+			return "external name"
+		case s.Selector == "" && s.Endpoints == 0:
+			return "no selector"
+		}
+		return count(s.Endpoints, "endpoint", "endpoints")
+	case resource.KindIngress, resource.KindRoute:
+		if len(s.Hosts) == 0 {
+			return ""
+		}
+		if len(s.Hosts) > 1 {
+			return fmt.Sprintf("%s +%d", s.Hosts[0], len(s.Hosts)-1)
+		}
+		return s.Hosts[0]
+	case resource.KindConfigMap, resource.KindSecret:
+		return count(len(s.Keys), "key", "keys")
+	}
+	return ""
+}
+
+func count(n int, one, many string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return fmt.Sprintf("%d %s", n, many)
+}
+
+// QuietText explains the quiet word in the detail pane; "" for a fact,
+// which explains itself and claims no check.
 func QuietText(o *resource.Object) string {
-	if QuietWord(o) == Unchecked {
+	switch {
+	case Fact(o) != "":
+		return ""
+	case QuietWord(o) == Unchecked:
 		return "no Ready condition to read"
 	}
 	return "nothing to do"

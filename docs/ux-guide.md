@@ -24,12 +24,12 @@ Two levels (P15). The **cluster level** lists the namespaces and, under
 `cluster`, the cluster-scoped sections; nothing expands in place there:
 
 ```
- kind-dev  v1.34.1                    7 errors · 10 warnings · 3 notes · 8 namespaces · 25 pods
+ kind-dev  v1.34.1                    8 errors · 13 warnings · 3 notes · 8 namespaces · 25 pods
  ▸ argocd [2]               healthy                 90d  │ cluster
- ▸ payments [2]             ·3 ·4                   90d  │ kind-dev                       age 120d
- ▸ shop [6]                 ·4 ·3 ·2                90d  │
-   legacy-feature           terminating            400d  │ Server      https://127.0.0.1:6443
- cluster                                                 │ Namespaces  8 · 7 errors, 10 warnings, 3 notes
+ ▸ payments [8]             ·4 ·6                   90d  │ kind-dev                       age 120d
+ ▸ shop [20]                ·4 ·3 ·2                90d  │
+   legacy-feature           terminating            400d  │ Server          https://127.0.0.1:6443
+ cluster                                                 │ Namespaces      8 · 8 errors, 13 warnings, 3 notes
    ▸ custom resources [1]                                │
  ↑↓/jk move • →/enter open • ! problems only • / filter • C context • r reload       ? help • q quit
 ```
@@ -42,12 +42,14 @@ contents without the namespace row, and the header becomes a breadcrumb:
  deployments                                                    │ shop · pod
    ▾ api                         degraded +1        2/3  30d    │ api-7b8d9f6c5-zp6qx                 age 25m
        api-5f9c7d8b6-9vn2c       healthy            1/1   3d    │
-       api-7b8d9f6c5-zp6qx       crashloop +1       0/1  25m    │ crashloop   container keeps crashing (app)
- statefulsets                                                   │ restarting  restarted in the last hour (app)
+       api-7b8d9f6c5-zp6qx       crashloop +1       0/1  25m    │ crashloop       container keeps crashing (app)
+ statefulsets                                                   │ restarting      restarted in the last hour (app)
    ▸ postgres [1]                ·1                 1/1  30d    │
- ▸ custom resources [4]          ·1                             │ Phase       Running
-                                                                │ Node        node-2
-                                                                │ c copy name
+ services                                                       │ Phase           Running
+     api                         2 endpoints             30d    │ Node            node-2
+ ▸ custom resources [3]          ·1                             │
+ secrets                                                        │
+     api-tls                     2 keys                  30d    │ c copy name
  ↑↓/jk move • ←→/hl collapse/expand • ⇧←→/HL all below • space toggle • ⌫ back • ! problems only • / filter • C context • r reload
 ```
 
@@ -92,7 +94,7 @@ page at once (before it would close the filter):
    `esc close`.
 2. **Legend**: the words and symbols in their colors: `Problems` (the
    danger words), `Status` (the other issue words, `healthy`, `completed`,
-   `unchecked`),
+   `unchecked`, `3 keys` for the facts),
    `Symbols` (`n/m`, `+n`, `·k`, `[n]`, `●`, the age). Then `App` with
    `esc close`. The words come from `Theme.Legend()`, the levels from
    `IssueKind.Level()`, so they are the tree's.
@@ -116,7 +118,7 @@ indent ▸ name [n]   status          ready  age
 | indent | 2 per depth | |
 | toggle | 3 | `▸` collapsed, `▾` expanded, `●` for a pod (in the color of its most severe issue, muted while healthy), blank for other leaves |
 | name | fits the widest visible name | name, `[n]` = direct children (collapsed only) |
-| status | the widest visible status, at least 16 | issue word, `+n`, `·k` hidden issues per level (red, yellow, blue); muted `healthy` / `completed` / `unchecked` without issues; spinner while loading; `error` |
+| status | the widest visible status, at least 16 | issue word, `+n`, `·k` hidden issues per level (red, yellow, blue); muted `healthy` / `completed` / `unchecked` or a fact (`2 endpoints`, a host, `3 keys`, at most 24 columns) without issues; spinner while loading; `error` |
 | ready | 5, right-aligned | `ready/desired` replicas of a workload, `ready/total` containers of a pod |
 | age | 4, right-aligned, muted | like kubectl: `40s`, `25m`, `3h`, `12d` |
 
@@ -131,7 +133,9 @@ indent ▸ name [n]   status          ready  age
   counts its objects.
 - Rows without issues: name and counts muted (except the selected row),
   status `healthy` in muted grey. An empty cell would look like missing
-  data; the muted word confirms the check ran.
+  data; the muted word confirms the check ran. Services, Ingresses,
+  Routes, ConfigMaps and Secrets show a muted fact there instead
+  (state-model, F62).
 - A collapsed row without issues of its own but with issues below shows
   only the counts (`·3 ·4`), not `healthy`.
 
@@ -140,17 +144,24 @@ indent ▸ name [n]   status          ready  age
 1. Namespace and kind (muted, `shop · pod`, `shop ·
    certificate.cert-manager.io`), then the name (bold) with the age
    right-aligned (`age 25m`).
-2. One line per issue: word (colored, 12 columns) + explanation, naming the
+2. One line per issue: word (colored, 16 columns) + explanation, naming the
    container (`container keeps crashing (app)`). `healthy  nothing to do`
    if there are none here and none below (`unchecked  no Ready condition
-   to read` for a custom resource without one).
+   to read` for a custom resource without one); nothing for a kind that
+   shows a fact, which the lines below spell out.
 3. Facts: `Ready 2/3 · 1 updated` (workloads), `Phase`, `Node` (pods),
+   `Type`, `Selector`, `Endpoints` (`2 ready`, `· scaled to zero`),
+   `Selects` (the workloads, `no pod`) for Services, `Hosts`, `Address`,
+   `Services` (a missing one `web (missing)` in the color of its issue)
+   for Ingresses and Routes, `Type` for Secrets,
    `Objects` (namespaces) / `Pods` (workloads): count and the issues below.
    - `Issues below` (namespaces and the cluster only): one line per issue
-     kind, the word in its color (12 columns) and the number of objects
+     kind, the word in its color (16 columns) and the number of objects
      with it, most severe first; left out if there are none.
 4. `Conditions` (custom resources): type, status (in the color of the
    issue about it, muted otherwise), reason; the message below, muted.
+   `Keys` (ConfigMaps; `Keys · values hidden` for Secrets): each key and
+   the size of its value (`2.3 KiB`), never the value.
    `Containers` (pods): name, state (in the color of the issue about it, muted
    otherwise), restarts with the last reason and its age; the image below,
    muted.
@@ -231,15 +242,19 @@ colors in components.
 | `oom killed` | container ran out of memory (`c`) |
 | `pull error` | image can't be pulled (`c`) |
 | `failed` | ran and failed |
+| `backend missing` | no Service `s` (the missing ones) |
 | `pending` | not scheduled or not started yet |
 | `not ready` | running, but not ready (`c`); Ready condition is False (`reason`) for a custom resource |
 | `degraded` | only `r` of `n` replicas ready |
+| `no endpoints` | no ready endpoint for `app=web` |
+| `no address` | no address yet, no controller or router admitted it; rejected by the router (`reason`) |
 | `restarting` | restarted in the last hour (`c`) |
 | `rolling out` | `u` of `n` replicas updated |
 | `suspended` | schedule suspended, no new runs |
 | `terminating` | namespace is being deleted |
 | `healthy` | nothing to do |
 | `unchecked` | no Ready condition to read (custom resources) |
+| `2 endpoints`, `no selector`, `external name`, a host (`+n`), `3 keys` | facts, no line of their own (Services, Ingresses, Routes, ConfigMaps, Secrets) |
 
 ## Navigation
 

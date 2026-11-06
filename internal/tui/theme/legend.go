@@ -25,12 +25,18 @@ func issueMeaning(k resource.IssueKind) string {
 		return "image not pullable"
 	case resource.IssueFailed:
 		return "pod or job failed"
+	case resource.IssueBackendMissing:
+		return "Service not found"
 	case resource.IssuePending:
 		return "not started yet"
 	case resource.IssueNotReady:
 		return "pod or resource not ready"
 	case resource.IssueDegraded:
 		return "some replicas ready"
+	case resource.IssueNoEndpoints:
+		return "selects no ready pod"
+	case resource.IssueNoAddress:
+		return "not admitted yet"
 	case resource.IssueRestarting:
 		return "restarted in last hour"
 	case resource.IssueRollingOut:
@@ -62,11 +68,12 @@ func (t Theme) Legend() []LegendGroup {
 		LegendRow{muted.Render(Healthy), "nothing to do"},
 		LegendRow{muted.Render(Completed), "pod ran to completion"},
 		LegendRow{muted.Render(Unchecked), "no Ready condition to read"},
+		LegendRow{muted.Render("3 keys"), "fact instead of healthy"},
 	)
 	symbols := LegendGroup{Title: "Symbols", Rows: []LegendRow{
 		{muted.Render("n/m"), "ready / desired"},
 		{muted.Render("+n"), "n more issues"},
-		{Fg(t.Warn).Render(g.Problems + "k"), "issues below, collapsed"},
+		{Fg(t.Warn).Render(g.Problems + "k"), "issues below"},
 		{muted.Render("[n]"), "children, collapsed"},
 		{muted.Render(g.Pod), "pod, runs containers"},
 		{muted.Render("3d"), "age"},

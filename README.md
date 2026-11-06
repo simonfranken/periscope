@@ -15,11 +15,13 @@ you actually have:
 
 - **The cluster as a tree.** Namespaces, then their workloads grouped by
   kind (deployments, statefulsets, daemonsets, jobs, cronjobs), then their
-  pods. Collapsed until you open them.
+  pods; services, ingresses, routes, configmaps and secrets (keys and
+  sizes, never the values). Collapsed until you open them.
 - **Problems are loud, healthy is quiet.** Objects without issues are a
   muted `healthy`. Real problems are words in red (`crashloop`,
-  `oom killed`, `pull error`, `down`, `failed`) or yellow (`pending`,
-  `not ready`, `degraded`, `restarting`). A collapsed namespace counts the
+  `oom killed`, `pull error`, `down`, `failed`, `backend missing`) or
+  yellow (`pending`, `not ready`, `degraded`, `no endpoints`, `no address`,
+  `restarting`). A collapsed namespace counts the
   problems hidden below it (`·3 ·4`).
 - **Words, not symbols.** Every state is a short word, so nothing depends on
   color alone. `?` shows every key and what each word means.

@@ -13,6 +13,8 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -44,9 +46,19 @@ type lists struct {
 	jobs         []batchv1.Job
 	cronjobs     []batchv1.CronJob
 	pods         []corev1.Pod
+	services     []corev1.Service
+	slices       []discoveryv1.EndpointSlice
+	ingresses    []networkingv1.Ingress
+	routes       []route
+	configmaps   []keyed
+	secrets      []keyed
+
+	// the namespaces where Services or EndpointSlices can't be listed
+	servicesDenied, slicesDenied map[string]bool
 }
 
-// Tree lists the namespaces, workloads and pods. An exec plugin waiting for
+// Tree lists the namespaces, workloads, pods, Services, Ingresses, Routes,
+// ConfigMaps and Secrets. An exec plugin waiting for
 // a login doesn't stop when its request is cancelled, so Tree gives up on
 // it after treeTimeout and returns what the plugin said.
 func (p *Provider) Tree(ctx context.Context) (*resource.Cluster, error) {
@@ -162,6 +174,54 @@ func (p *Provider) tree(ctx context.Context) (*resource.Cluster, error) {
 			})
 			return err
 		},
+		func() (err error) {
+			l.services, l.servicesDenied, err = listKindDenied(ctx, names, all, func(ns string, o metav1.ListOptions) ([]corev1.Service, string, error) {
+				r, err := c.CoreV1().Services(ns).List(ctx, o)
+				return items(r, err, func(r *corev1.ServiceList) ([]corev1.Service, string) { return r.Items, r.Continue })
+			})
+			return err
+		},
+		func() (err error) {
+			l.slices, l.slicesDenied, err = listKindDenied(ctx, names, all, func(ns string, o metav1.ListOptions) ([]discoveryv1.EndpointSlice, string, error) {
+				r, err := c.DiscoveryV1().EndpointSlices(ns).List(ctx, o)
+				return items(r, err, func(r *discoveryv1.EndpointSliceList) ([]discoveryv1.EndpointSlice, string) {
+					return r.Items, r.Continue
+				})
+			})
+			return err
+		},
+		func() (err error) {
+			l.ingresses, err = listKind(ctx, names, all, func(ns string, o metav1.ListOptions) ([]networkingv1.Ingress, string, error) {
+				r, err := c.NetworkingV1().Ingresses(ns).List(ctx, o)
+				return items(r, err, func(r *networkingv1.IngressList) ([]networkingv1.Ingress, string) { return r.Items, r.Continue })
+			})
+			return err
+		},
+		func() (err error) {
+			if p.dyn == nil {
+				return nil
+			}
+			l.routes, err = listKind(ctx, names, all, func(ns string, o metav1.ListOptions) ([]route, string, error) {
+				r, err := p.dyn.Resource(routeGVR).Namespace(ns).List(ctx, o)
+				return items(r, err, routes)
+			})
+			return err
+		},
+		func() (err error) {
+			l.configmaps, err = listKind(ctx, names, all, func(ns string, o metav1.ListOptions) ([]keyed, string, error) {
+				r, err := c.CoreV1().ConfigMaps(ns).List(ctx, o)
+				return items(r, err, configMaps)
+			})
+			return err
+		},
+		func() (err error) {
+			l.secrets, err = listKind(ctx, names, all, func(ns string, o metav1.ListOptions) ([]keyed, string, error) {
+				o.Limit = secretPageSize
+				r, err := c.CoreV1().Secrets(ns).List(ctx, o)
+				return items(r, err, secrets)
+			})
+			return err
+		},
 	)
 	if err != nil {
 		return nil, err
@@ -221,8 +281,13 @@ func items[L, T any](r L, err error, get func(L) ([]T, string)) ([]T, string, er
 	return its, next, nil
 }
 
-// pageSize is how many objects a List returns at once.
-const pageSize = 500
+// pageSize is how many objects a List returns at once; secretPageSize for
+// Secrets, of which Helm's can be up to 1 MiB each and are only reduced to
+// their keys once a page is decoded.
+const (
+	pageSize       = 500
+	secretPageSize = 50
+)
 
 // page lists all pages.
 func page[T any](ctx context.Context, list func(metav1.ListOptions) ([]T, string, error)) ([]T, error) {
@@ -246,23 +311,32 @@ func page[T any](ctx context.Context, list func(metav1.ListOptions) ([]T, string
 // and kinds the user may not list are left out: they see what they may see.
 // A kind the server doesn't serve is empty.
 func listKind[T any](ctx context.Context, nss []string, all bool, list listFunc[T]) ([]T, error) {
+	its, _, err := listKindDenied(ctx, nss, all, list)
+	return its, err
+}
+
+// listKindDenied is listKind, and also returns the namespaces left out
+// because listing the kind there is forbidden, for what is derived from the
+// kind: a Service that isn't listed is not missing.
+func listKindDenied[T any](ctx context.Context, nss []string, all bool, list listFunc[T]) ([]T, map[string]bool, error) {
 	if all {
 		its, err := page(ctx, func(o metav1.ListOptions) ([]T, string, error) { return list("", o) })
 		switch {
 		case err == nil:
-			return its, nil
+			return its, nil, nil
 		case apierrors.IsNotFound(err):
-			return nil, nil
+			return nil, nil, nil
 		case !apierrors.IsForbidden(err):
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	var (
-		mu    sync.Mutex
-		out   []T
-		first error
-		wg    sync.WaitGroup
-		sem   = make(chan struct{}, parallel)
+		mu     sync.Mutex
+		out    []T
+		denied = map[string]bool{}
+		first  error
+		wg     sync.WaitGroup
+		sem    = make(chan struct{}, parallel)
 	)
 	for _, ns := range nss {
 		wg.Go(func() {
@@ -274,14 +348,16 @@ func listKind[T any](ctx context.Context, nss []string, all bool, list listFunc[
 			switch {
 			case err == nil:
 				out = append(out, its...)
-			case apierrors.IsForbidden(err), apierrors.IsNotFound(err):
+			case apierrors.IsForbidden(err):
+				denied[ns] = true
+			case apierrors.IsNotFound(err):
 			case first == nil:
 				first = err
 			}
 		})
 	}
 	wg.Wait()
-	return out, first
+	return out, denied, first
 }
 
 // parallelly runs fns at once and returns the first error.
@@ -304,7 +380,9 @@ func parallelly(fns ...func() error) error {
 // Pod → ReplicaSet → Deployment, Pod → StatefulSet or DaemonSet,
 // Pod → Job → CronJob. ReplicaSets are not shown. A pod without a workload
 // (a static pod, a bare pod, one of an operator) is listed in its namespace
-// under "pods" (F3), so no pod is left out.
+// under "pods" (F3), so no pod is left out. Services, Ingresses, Routes,
+// ConfigMaps and Secrets are children of their namespace; what a Service
+// selects and an Ingress routes to is in their status (F63).
 func build(l *lists) (*resource.Cluster, *snapshot) {
 	s := &snapshot{
 		statuses: map[string]*resource.Status{},
@@ -328,23 +406,36 @@ func build(l *lists) (*resource.Cluster, *snapshot) {
 	}
 
 	owners := map[types.UID]*resource.Object{} // workloads, by UID
-	workload := func(parent *resource.Object, k resource.Kind, kind string, m *metav1.ObjectMeta, st *resource.Status) {
+	sel := map[string]*selects{}               // by namespace
+	for name := range nss {
+		sel[name] = &selects{}
+	}
+	workload := func(parent *resource.Object, k resource.Kind, kind string, m *metav1.ObjectMeta, st *resource.Status) *resource.Object {
 		if parent == nil {
-			return // its namespace is not listed
+			return nil // its namespace is not listed
 		}
 		o := &resource.Object{Kind: k, Name: m.Name}
 		adopt(parent, o)
 		s.add(o, kind, m, st)
 		owners[m.UID] = o
+		return o
+	}
+	template := func(o *resource.Object, t *corev1.PodTemplateSpec, st *resource.Status) {
+		if o != nil {
+			sel[o.Namespace].workloads = append(sel[o.Namespace].workloads, selectedWorkload{labels: t.Labels, ref: o.Ref(), desired: st.Desired})
+		}
 	}
 	for _, d := range l.deployments {
-		workload(nss[d.Namespace], resource.KindDeployment, "Deployment", &d.ObjectMeta, deploymentStatus(&d))
+		st := deploymentStatus(&d)
+		template(workload(nss[d.Namespace], resource.KindDeployment, "Deployment", &d.ObjectMeta, st), &d.Spec.Template, st)
 	}
 	for _, d := range l.statefulsets {
-		workload(nss[d.Namespace], resource.KindStatefulSet, "StatefulSet", &d.ObjectMeta, statefulSetStatus(&d))
+		st := statefulSetStatus(&d)
+		template(workload(nss[d.Namespace], resource.KindStatefulSet, "StatefulSet", &d.ObjectMeta, st), &d.Spec.Template, st)
 	}
 	for _, d := range l.daemonsets {
-		workload(nss[d.Namespace], resource.KindDaemonSet, "DaemonSet", &d.ObjectMeta, daemonSetStatus(&d))
+		st := daemonSetStatus(&d)
+		template(workload(nss[d.Namespace], resource.KindDaemonSet, "DaemonSet", &d.ObjectMeta, st), &d.Spec.Template, st)
 	}
 	for _, c := range l.cronjobs {
 		workload(nss[c.Namespace], resource.KindCronJob, "CronJob", &c.ObjectMeta, cronJobStatus(&c))
@@ -375,6 +466,51 @@ func build(l *lists) (*resource.Cluster, *snapshot) {
 		o := &resource.Object{Kind: resource.KindPod, Name: p.Name}
 		adopt(parent, o)
 		s.add(o, "Pod", &p.ObjectMeta, podStatus(&p))
+		w := o // what the pod is listed as: its workload, or itself
+		for w.Parent.Kind != resource.KindNamespace {
+			w = w.Parent
+		}
+		sel[p.Namespace].pods = append(sel[p.Namespace].pods, selectedPod{labels: p.Labels, ready: podReady(&p), target: w.Ref()})
+	}
+
+	child := func(k resource.Kind, kind string, m *metav1.ObjectMeta, st *resource.Status) {
+		if parent := nss[m.Namespace]; parent != nil {
+			o := &resource.Object{Kind: k, Name: m.Name}
+			adopt(parent, o)
+			s.add(o, kind, m, st)
+		}
+	}
+	ready := endpoints(l.slices)
+	services := map[string]bool{} // "<namespace>/<name>"
+	for _, svc := range l.services {
+		services[svc.Namespace+"/"+svc.Name] = true
+		if sel[svc.Namespace] == nil {
+			continue
+		}
+		var n *int
+		if !l.slicesDenied[svc.Namespace] {
+			c := ready[svc.Namespace+"/"+svc.Name]
+			n = &c
+		}
+		child(resource.KindService, "Service", &svc.ObjectMeta, serviceStatus(&svc, sel[svc.Namespace], n))
+	}
+	exists := func(ns string) func(string) bool {
+		if l.servicesDenied[ns] {
+			return nil
+		}
+		return func(name string) bool { return services[ns+"/"+name] }
+	}
+	for _, in := range l.ingresses {
+		child(resource.KindIngress, "Ingress", &in.ObjectMeta, ingressStatus(&in, exists(in.Namespace)))
+	}
+	for _, r := range l.routes {
+		child(resource.KindRoute, "Route", &r.Metadata, routeStatus(&r, exists(r.Metadata.Namespace)))
+	}
+	for _, c := range l.configmaps {
+		child(resource.KindConfigMap, "ConfigMap", &c.meta, keyedStatus(&c))
+	}
+	for _, c := range l.secrets {
+		child(resource.KindSecret, "Secret", &c.meta, keyedStatus(&c))
 	}
 
 	byName := func(objs []*resource.Object) {

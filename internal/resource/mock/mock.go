@@ -162,6 +162,42 @@ func (b builder) custom(t *resource.Type, name string, conds ...resource.Conditi
 	return o
 }
 
+// object is a Service, Ingress, Route, ConfigMap or Secret of kind k.
+func (b builder) object(k resource.Kind, name string, st *resource.Status) *resource.Object {
+	if st.Created.IsZero() {
+		st.Created = b.now.Add(-30 * 24 * time.Hour)
+	}
+	o := &resource.Object{Kind: k, Name: name}
+	b.statuses[o.Ref()] = st
+	return o
+}
+
+// service selects app=<app>; targets are the workloads that match.
+func (b builder) service(name, app string, endpoints int, targets ...string) *resource.Object {
+	return b.object(resource.KindService, name, &resource.Status{Type: "ClusterIP", Selector: "app=" + app, Endpoints: endpoints, Targets: targets})
+}
+
+func backends(services ...string) []resource.Backend {
+	var out []resource.Backend
+	for _, s := range services {
+		missing := s[0] == '!'
+		if missing {
+			s = s[1:]
+		}
+		out = append(out, resource.Backend{Service: s, Missing: missing})
+	}
+	return out
+}
+
+// keys are the keys of a ConfigMap or Secret, all of size n.
+func keys(n int, names ...string) []resource.Key {
+	var out []resource.Key
+	for _, k := range names {
+		out = append(out, resource.Key{Name: k, Size: n})
+	}
+	return out
+}
+
 // clusterScoped puts a custom resource at the top level, where its path
 // is its ref, the key custom registered its status under.
 func (b builder) clusterScoped(o *resource.Object) *resource.Object {
@@ -174,7 +210,6 @@ func (b builder) clusterScoped(o *resource.Object) *resource.Object {
 var (
 	certificate    = &resource.Type{Kind: "Certificate", Plural: "certificates", Group: "cert-manager.io"}
 	clusterIssuer  = &resource.Type{Kind: "ClusterIssuer", Plural: "clusterissuers", Group: "cert-manager.io"}
-	route          = &resource.Type{Kind: "Route", Plural: "routes", Group: "route.openshift.io"}
 	serviceMonitor = &resource.Type{Kind: "ServiceMonitor", Plural: "servicemonitors", Group: "monitoring.coreos.com"}
 	argoApp        = &resource.Type{Kind: "Application", Plural: "applications", Group: "argoproj.io"}
 	sigApp         = &resource.Type{Kind: "Application", Plural: "applications", Group: "app.k8s.io"}
@@ -226,6 +261,15 @@ func fixture(statuses map[string]*resource.Status, now time.Time) *resource.Clus
 		{Name: "app", Image: "registry.example.com/search/indexer:3.0.0", State: resource.ContainerWaiting, Reason: "ContainerCreating"},
 	}, Events: []resource.Event{{Reason: "FailedScheduling", Message: "0/3 nodes are available: 3 Insufficient memory.", Count: 4, Last: ago(30 * time.Second)}}}
 
+	var helm []*resource.Object // Helm keeps one Secret per release revision
+	for i := 1; i <= 3; i++ {
+		helm = append(helm, b.object(resource.KindSecret, fmt.Sprintf("sh.helm.release.v1.shop.v%d", i),
+			&resource.Status{Type: "helm.sh/release.v1", Keys: keys(14_211, "release"), Created: ago(time.Duration(64-21*i) * 24 * time.Hour)}))
+	}
+	rootCA := func() *resource.Object {
+		return b.object(resource.KindConfigMap, "kube-root-ca.crt", &resource.Status{Keys: keys(1107, "ca.crt")})
+	}
+
 	nodes := []string{"node-1", "node-2", "node-3"}
 	var exporters []*resource.Object
 	var proxies []*resource.Object
@@ -243,6 +287,9 @@ func fixture(statuses map[string]*resource.Status, now time.Time) *resource.Clus
 		b.namespace("default", ns(),
 			b.workload(resource.KindDeployment, "hello", &resource.Status{Desired: 1, Ready: 1, Updated: 1},
 				b.pod("hello-6d8f9b7c4-x2k9p", running("node-1", "nginx:1.29"))),
+			b.object(resource.KindService, "kubernetes", &resource.Status{Type: "ClusterIP", Endpoints: 1}),
+			b.service("hello", "hello", 1, "deployment/hello"),
+			rootCA(),
 		),
 		b.namespace("kube-system", ns(),
 			b.workload(resource.KindDeployment, "coredns", &resource.Status{Desired: 2, Ready: 2, Updated: 2},
@@ -256,8 +303,13 @@ func fixture(statuses map[string]*resource.Status, now time.Time) *resource.Clus
 			b.workload(resource.KindStatefulSet, "prometheus", &resource.Status{Desired: 1, Ready: 1, Updated: 1},
 				b.pod("prometheus-0", running("node-3", "prom/prometheus:v3.5.0"))),
 			b.workload(resource.KindDaemonSet, "node-exporter", &resource.Status{Desired: 3, Ready: 3, Updated: 3}, exporters...),
+			b.service("grafana", "grafana", 1, "deployment/grafana"),
+			b.service("prometheus", "prometheus", 1, "statefulset/prometheus"),
+			b.object(resource.KindIngress, "grafana", &resource.Status{Hosts: []string{"grafana.example.com"}, Addresses: []string{"203.0.113.10"}, Backends: backends("grafana")}),
 			b.custom(serviceMonitor, "grafana"),
 			b.custom(serviceMonitor, "node-exporter"),
+			b.object(resource.KindConfigMap, "grafana-dashboards", &resource.Status{Keys: keys(48_310, "cluster.json", "namespaces.json", "nodes.json", "pods.json", "workloads.json")}),
+			rootCA(),
 		),
 		b.namespace("payments", ns(),
 			b.workload(resource.KindDeployment, "checkout", &resource.Status{Desired: 2, Ready: 0, Updated: 2},
@@ -266,11 +318,20 @@ func fixture(statuses map[string]*resource.Status, now time.Time) *resource.Clus
 			b.workload(resource.KindDeployment, "fraud", &resource.Status{Desired: 2, Ready: 1, Updated: 2},
 				b.pod("fraud-6f7d8c9b5-2kq8s", running("node-2", "registry.example.com/payments/fraud:0.9.3")),
 				b.pod("fraud-6f7d8c9b5-vx9ld", notReady)),
+			b.service("checkout", "checkout", 0, "deployment/checkout"),
+			b.service("fraud", "fraud", 1, "deployment/fraud"),
+			b.object(resource.KindIngress, "checkout", &resource.Status{Hosts: []string{"pay.example.com"}, Addresses: []string{"203.0.113.10"}, Backends: backends("checkout", "!checkout-v2")}),
+			b.object(resource.KindRoute, "fraud-admin", &resource.Status{Hosts: []string{"fraud.apps.kind-dev.example.com"}, Rejected: "HostAlreadyClaimed", Backends: backends("fraud")}),
+			b.object(resource.KindSecret, "stripe", &resource.Status{Type: "Opaque", Keys: keys(32, "api-key", "webhook-secret")}),
+			rootCA(),
 		),
 		b.namespace("search", ns(),
 			b.workload(resource.KindDeployment, "indexer", &resource.Status{Desired: 2, Ready: 1, Updated: 2},
 				b.pod("indexer-9d6b7c5f8-h3n2m", running("node-3", "registry.example.com/search/indexer:3.0.0")),
 				b.pod("indexer-9d6b7c5f8-q7w4e", unscheduled)),
+			b.service("indexer", "indexer", 1, "deployment/indexer"),
+			b.object(resource.KindIngress, "search", &resource.Status{Hosts: []string{"search.example.com", "search-admin.example.com"}, Backends: backends("indexer")}),
+			rootCA(),
 		),
 		b.namespace("shop", ns(),
 			b.workload(resource.KindDeployment, "api", &resource.Status{Desired: 3, Ready: 2, Updated: 1},
@@ -285,14 +346,27 @@ func fixture(statuses map[string]*resource.Status, now time.Time) *resource.Clus
 			b.workload(resource.KindJob, "migrate-42", &resource.Status{Phase: resource.PhaseFailed},
 				b.pod("migrate-42-x8f2k", failed)),
 			b.workload(resource.KindCronJob, "nightly-report", &resource.Status{Suspended: true}),
+			b.workload(resource.KindDeployment, "admin", &resource.Status{}),
+			b.service("api", "api", 2, "deployment/api"),
+			b.service("web", "web", 2, "deployment/web"),
+			b.service("postgres", "postgres", 1, "statefulset/postgres"),
+			b.object(resource.KindService, "admin", &resource.Status{Type: "ClusterIP", Selector: "app=admin", Idle: true, Targets: []string{"deployment/admin"}}),
+			b.object(resource.KindIngress, "shop", &resource.Status{Hosts: []string{"shop.example.com", "api.shop.example.com"}, Addresses: []string{"203.0.113.10"}, Backends: backends("web", "api")}),
+			b.object(resource.KindRoute, "web", &resource.Status{Hosts: []string{"web-shop.apps.kind-dev.example.com"}, Addresses: []string{"router-default.apps.kind-dev.example.com"}, Backends: backends("web")}),
+			b.object(resource.KindConfigMap, "api-config", &resource.Status{Keys: []resource.Key{{Name: "LOG_LEVEL", Size: 4}, {Name: "config.yaml", Size: 2_341}, {Name: "features.json", Size: 612}}}),
+			rootCA(),
+			b.object(resource.KindSecret, "api-tls", &resource.Status{Type: "kubernetes.io/tls", Keys: []resource.Key{{Name: "tls.crt", Size: 3_862}, {Name: "tls.key", Size: 1_704}}}),
+			b.object(resource.KindSecret, "postgres", &resource.Status{Type: "Opaque", Keys: keys(24, "password", "username")}),
 			b.custom(certificate, "web-tls", resource.Condition{Type: "Ready", Status: "False", Reason: "Failed",
 				Message: "The certificate request has failed to complete and will be retried: ACME challenge failed"}),
 			b.custom(certificate, "api-tls", ready("Ready", "Certificate is up to date and has not expired")),
-			b.custom(route, "web"),
 			b.custom(sigApp, "storefront", ready("ComponentsReady", "all components ready")),
 		),
 		b.namespace("legacy-feature", &resource.Status{Created: ago(400 * 24 * time.Hour), Terminating: true}),
 		b.clusterScoped(b.custom(clusterIssuer, "letsencrypt", ready("ACMEAccountRegistered", "The ACME account was registered with the ACME server"))),
+	}
+	for _, h := range helm {
+		b.adopt(objects[6], h) // shop
 	}
 	objects = resource.Arrange(objects)
 
@@ -320,6 +394,10 @@ func staging(statuses map[string]*resource.Status, now time.Time) *resource.Clus
 				b.pod("api-6c9d8b7f5-t8w3x", running("node-b", "registry.example.com/shop/api:1.7.4"))),
 			b.workload(resource.KindDeployment, "web", &resource.Status{Desired: 1, Ready: 1, Updated: 1},
 				b.pod("web-5b8c7d6f4-p2r9z", running("node-a", "registry.example.com/shop/web:4.2.1"))),
+			b.service("api", "api", 2, "deployment/api"),
+			b.service("web", "web", 1, "deployment/web"),
+			b.object(resource.KindIngress, "shop", &resource.Status{Hosts: []string{"staging.shop.example.com"}, Addresses: []string{"198.51.100.7"}, Backends: backends("web", "api")}),
+			b.object(resource.KindConfigMap, "api-config", &resource.Status{Keys: keys(120, "LOG_LEVEL", "config.yaml")}),
 		),
 	})
 	statuses[""] = &resource.Status{Created: now.Add(-300 * 24 * time.Hour)}

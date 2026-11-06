@@ -14,7 +14,7 @@ import (
 	"periscope/internal/tui/theme"
 )
 
-const labelWidth = 12 // "rolling out" + 1
+const labelWidth = 16 // "backend missing" + 1
 
 // maxEvents is how many warning events the pane lists.
 const maxEvents = 5
@@ -164,8 +164,8 @@ func (m Model) lines(o *resource.Object, c *resource.Cluster) []string {
 	if root {
 		below = hiddenIn(c.Objects)
 	}
-	if len(issues) == 0 && below.Total() == 0 {
-		out = append(out, label(theme.QuietWord(o))+muted.Render(theme.QuietText(o)))
+	if q := theme.QuietText(o); len(issues) == 0 && below.Total() == 0 && q != "" {
+		out = append(out, label(theme.QuietWord(o))+muted.Render(q))
 	}
 	if len(out) > 3 {
 		out = append(out, "")
@@ -199,6 +199,7 @@ func (m Model) lines(o *resource.Object, c *resource.Cluster) []string {
 	if st.Node != "" {
 		out = append(out, label("Node")+text.Render(st.Node))
 	}
+	out = append(out, m.networkLines(o, issues)...)
 	if n := len(o.Children); n > 0 {
 		children := fmt.Sprintf("%d", n)
 		if parts := m.hiddenParts(below); parts != "" {
@@ -215,6 +216,13 @@ func (m Model) lines(o *resource.Object, c *resource.Cluster) []string {
 	if len(st.Conditions) > 0 {
 		out = append(out, "", muted.Bold(true).Render("Conditions"))
 		out = append(out, m.conditionLines(st, issues)...)
+	}
+	if o.Kind == resource.KindConfigMap || o.Kind == resource.KindSecret {
+		keys := m.keyLines(o)
+		if out[len(out)-1] == "" && keys[0] == "" { // nothing between the name and the keys
+			keys = keys[1:]
+		}
+		out = append(out, keys...)
 	}
 	if len(st.Containers) > 0 {
 		out = append(out, "", muted.Bold(true).Render("Containers"))
@@ -235,6 +243,103 @@ func (m Model) lines(o *resource.Object, c *resource.Cluster) []string {
 		}
 	}
 	return out
+}
+
+// networkLines are a Service's type, selector, endpoints and the workloads
+// it selects; an Ingress's or Route's hosts, addresses and the Services it
+// routes to, a missing one in the color of its issue (F63).
+func (m Model) networkLines(o *resource.Object, issues []resource.Issue) []string {
+	t := m.theme
+	muted, text := theme.Fg(t.Muted), theme.Fg(t.Text)
+	label := func(l string) string { return muted.Width(labelWidth).Render(l) }
+	list := func(items []string) string { return text.Render(strings.Join(items, ", ")) }
+	st := o.Status
+	var out []string
+	switch o.Kind {
+	case resource.KindService:
+		out = append(out, label("Type")+text.Render(st.Type))
+		if st.Selector == "" {
+			return append(out, label("Selector")+muted.Render("none"))
+		}
+		out = append(out, label("Selector")+text.Render(st.Selector))
+		endpoints := text.Render(fmt.Sprintf("%d ready", st.Endpoints))
+		if st.Idle {
+			endpoints += muted.Render(" · scaled to zero")
+		}
+		out = append(out, label("Endpoints")+endpoints)
+		if len(st.Targets) > 0 {
+			out = append(out, label("Selects")+list(st.Targets))
+		} else {
+			out = append(out, label("Selects")+muted.Render("no pod"))
+		}
+	case resource.KindIngress, resource.KindRoute:
+		if len(st.Hosts) > 0 {
+			out = append(out, label("Hosts")+list(st.Hosts))
+		}
+		if len(st.Addresses) > 0 {
+			out = append(out, label("Address")+list(st.Addresses))
+		}
+		if len(st.Backends) == 0 {
+			break
+		}
+		style := muted
+		for _, is := range issues {
+			if is.Kind == resource.IssueBackendMissing {
+				style = t.LevelStyle(is.Level, lipgloss.NewStyle())
+			}
+		}
+		var backends []string
+		for _, b := range st.Backends {
+			if b.Missing {
+				backends = append(backends, style.Render(b.Service+" (missing)"))
+			} else {
+				backends = append(backends, text.Render(b.Service))
+			}
+		}
+		out = append(out, label("Services")+strings.Join(backends, muted.Render(", ")))
+	}
+	return out
+}
+
+// keyLines are a ConfigMap's or Secret's keys and the sizes of their
+// values; a Secret's values are never shown (F64).
+func (m Model) keyLines(o *resource.Object) []string {
+	t := m.theme
+	muted, text := theme.Fg(t.Muted), theme.Fg(t.Text)
+	st := o.Status
+	var out []string
+	if st.Type != "" {
+		out = append(out, muted.Width(labelWidth).Render("Type")+text.Render(st.Type))
+	}
+	title := "Keys"
+	if o.Kind == resource.KindSecret {
+		title = "Keys · values hidden"
+	}
+	out = append(out, "", muted.Bold(true).Render(title))
+	if len(st.Keys) == 0 {
+		return append(out, muted.Render("none"))
+	}
+	w := 0
+	for _, k := range st.Keys {
+		w = max(w, ansi.StringWidth(k.Name))
+	}
+	w = min(max(w+1, labelWidth), m.width/2)
+	for _, k := range st.Keys {
+		name := ansi.Truncate(k.Name, w-1, "…")
+		out = append(out, text.Render(name)+strings.Repeat(" ", w-ansi.StringWidth(name))+muted.Render(size(k.Size)))
+	}
+	return out
+}
+
+// size formats a number of bytes: "512 B", "1.2 KiB", "3.4 MiB".
+func size(n int) string {
+	switch {
+	case n < 1024:
+		return fmt.Sprintf("%d B", n)
+	case n < 1024*1024:
+		return fmt.Sprintf("%.1f KiB", float64(n)/1024)
+	}
+	return fmt.Sprintf("%.1f MiB", float64(n)/1024/1024)
 }
 
 // containerLines lists a pod's containers: name, state, restarts, image. A

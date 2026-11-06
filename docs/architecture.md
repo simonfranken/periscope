@@ -19,10 +19,11 @@ internal/resource/             domain model; NO UI imports
   logs.go                      LogRequest, LogTarget, PickLog (which log matters), LogLevel of a line
 internal/resource/mock/        fixture cluster with every issue word, artificial latency, made-up logs
 internal/resource/kube/        provider using client-go
-  kube.go                      kubeconfig, client, Switcher
+  kube.go                      kubeconfig, clients (typed, dynamic for Routes), Switcher
   tree.go                      Tree: lists, owner links, snapshot; Status
-  status.go                    each kind's Status, warning events
+  status.go                    each workload kind's and the pods' Status, warning events
   logs.go                      Logs: kubectl logs --timestamps --follow, on a client without the request timeout
+  network.go                   Services, Ingresses, Routes, ConfigMaps, Secrets: Status, selectors, keys
   stderr.go                    Quiet: klog, API warnings and exec plugins' stderr kept off the terminal
 internal/update/               self-update from GitHub releases; NO UI imports
 internal/tui/                  Bubble Tea application
@@ -156,8 +157,18 @@ running containers.
   `Quiet` (`tui.WithClipboard`), else it would end in the pipe. Inside
   tmux it is sent unwrapped, for tmux's `set-clipboard on`.
 - `Tree` lists namespaces, then in parallel Deployments, StatefulSets,
-  DaemonSets, ReplicaSets, Jobs, CronJobs and pods, cluster-wide, 500 per
-  page, and the server version (waited for at most 1 s after them). It links pods to
+  DaemonSets, ReplicaSets, Jobs, CronJobs, pods, Services, EndpointSlices,
+  Ingresses, ConfigMaps, Secrets and OpenShift Routes (with the dynamic
+  client, so no OpenShift module is needed; a cluster that doesn't serve
+  them answers 404, which lists none), cluster-wide, 500 per
+  page, and the server version (waited for at most 1 s after them).
+  ConfigMaps and Secrets are reduced to their keys and sizes as each page
+  arrives (Secrets 50 per page), and of their metadata only name, namespace, UID and creation
+  time are kept (`last-applied-configuration` holds the values too), so
+  no value reaches the snapshot (F64). A Service is matched to pods and
+  pod templates by its selector, its ready endpoints are counted from its
+  EndpointSlices, an Ingress's or Route's backends are looked up among the
+  Services (`network.go`). It links pods to
   workloads by the controller owner reference's UID (Pod → ReplicaSet →
   Deployment, Pod → StatefulSet/DaemonSet, Pod → Job → CronJob); pods
   without one go under `pods` in their namespace (F3). The statuses are
@@ -166,7 +177,10 @@ running containers.
 - Forbidden is not fatal: if namespaces can't be listed, the one of
   `--namespace`, else the context's, else `default` is the only one and
   every kind is listed in it; a kind that can't be listed cluster-wide is listed per namespace
-  (8 at a time); what can't be listed at all is left out. Other errors
+  (8 at a time); what can't be listed at all is left out. `listKindDenied`
+  also returns the namespaces where a kind was forbidden: there no
+  backend counts as missing (Services), and a Service's endpoints are
+  counted from its ready pods (EndpointSlices). Other errors
   (unauthorized, unreachable) fail `Tree`, so the UI shows them.
 - Events: the first `Status` call after a `Tree` lists the cluster's
   warning events once (`type=Warning`, per namespace if need be, 30 s) and

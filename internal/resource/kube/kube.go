@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // legacy auth providers (oidc, azure, gcp), as kubectl
 	"k8s.io/client-go/rest"
@@ -42,6 +43,7 @@ type Provider struct {
 	server  string
 	client  kubernetes.Interface
 	logs    kubernetes.Interface // like client, without the request timeout, which would cut a followed log
+	dyn     dynamic.Interface    // for OpenShift's Routes; nil lists none
 
 	mu   sync.Mutex
 	snap *snapshot // of the last Tree
@@ -101,7 +103,11 @@ func newFor(rules clientcmd.ClientConfigLoadingRules, raw clientcmdapi.Config, n
 	if err != nil {
 		return nil, err
 	}
-	return &Provider{rules: rules, raw: raw, context: name, ns: kctx.Namespace, server: cfg.Host, client: client, logs: logs}, nil
+	dyn, err := dynamic.NewForConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &Provider{rules: rules, raw: raw, context: name, ns: kctx.Namespace, server: cfg.Host, client: client, logs: logs, dyn: dyn}, nil
 }
 
 // Contexts lists the kubeconfig's contexts sorted by name, as kubectl

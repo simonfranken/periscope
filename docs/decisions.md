@@ -351,3 +351,38 @@ movement, not while the mouse rests. OSC 52 is the only way to the
 clipboard so far: a terminal that refuses it copies nothing, and big
 copies are limited by what the terminal takes. A native fallback
 (`clip.exe`, `pbcopy`, `wl-copy`) for local sessions could follow.
+
+## P21: Services, Ingresses, Routes, ConfigMaps and Secrets
+
+**Context.** P14 planned the kinds beyond workloads; the first to come are
+those of traffic and configuration. OpenShift's Route is its Ingress, but
+P14 and F67 counted it among the custom resources, which the Kubernetes
+provider doesn't discover yet.
+**Decision.** Services, Ingresses, Routes, ConfigMaps and Secrets are
+built-in kinds, in the order of F60 (`routes` after `ingresses`). A Route
+is read with the dynamic client (`route.openshift.io/v1`), so periscope
+needs no OpenShift module and a cluster without it simply has no Routes;
+discovering custom resources must skip it, so no Route appears twice.
+A Service's endpoints are counted from its EndpointSlices, not from the
+pods it selects: they are what traffic reaches (a `targetPort` the pods
+lack gives ready pods and no endpoints). Where EndpointSlices can't be
+listed its ready pods count instead, and where Services can't be listed
+no backend is missing: a forbidden list never turns into a problem.
+A Service of a workload scaled to zero is quiet, like the workload. An
+Ingress or Route that no controller admitted is `no address`; one that
+routes to a Service that doesn't exist is `backend missing` (danger: its
+traffic fails). Without issues these kinds show a muted fact (`2
+endpoints`, the first host, `3 keys`) instead of `healthy` (F62), at most
+24 columns, so a long host doesn't push the names aside. ConfigMaps and
+Secrets keep their keys and sizes only; a Secret's values (and the
+annotations that may repeat them) are dropped as each page is listed.
+**Alternatives.** Routes as a custom resource: they would only appear
+with CRD discovery, and the user would lose the backend check. Counting
+endpoints from pods: one list less, but blind to port mismatches.
+Listing Secrets as metadata only: cheaper, but without their keys.
+**Consequences.** Six more lists per `Tree`; Secrets are often forbidden
+cluster-wide (`view` doesn't include them), so they are then listed per
+namespace, and Helm keeps a Secret per release revision, which makes the
+group long. Every `Tree` transfers all Secret data again (50 per page, so
+little of it is held at once) until watches come. An Ingress controller that doesn't publish its address marks
+every Ingress `no address`. PVCs and nodes are still to come.

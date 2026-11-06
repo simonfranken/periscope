@@ -39,7 +39,8 @@ broken.
   place there. Opening a namespace (`→`, `enter`) shows its contents
   without the namespace row: its workloads (Deployments, StatefulSets,
   DaemonSets, Jobs, CronJobs), below each workload its pods, then its
-  `custom resources` section. `←` from the top of a namespace, or `⌫` from
+  Services, Ingresses and Routes, its `custom resources` section, its
+  ConfigMaps and Secrets (F60). `←` from the top of a namespace, or `⌫` from
   anywhere in it, goes back.
 - **F2** Group the workloads of a namespace by kind under a non-selectable
   header (`deployments`, `statefulsets`, …), in that order.
@@ -66,38 +67,44 @@ broken.
   collapsed and restored when it is expanded again (except after "collapse
   all below", which resets it for the collapsed objects).
 
-### More resource kinds (planned, except F67)
+### More resource kinds (PVCs and nodes planned)
 
 See [P14](decisions.md#p14-resources-beyond-workloads) and the
 [planned kinds](state-model.md#planned-kinds) of the state model.
 
 - **F60** Below the workloads, a namespace lists its other resources,
   grouped by kind like the workloads (F2), in this order: `services`,
-  `ingresses`, `persistentvolumeclaims`, `custom resources` (F67), then
+  `ingresses`, `routes` (OpenShift, [P21](decisions.md#p21-services-ingresses-routes-configmaps-and-secrets)),
+  `persistentvolumeclaims` *(planned)*, `custom resources` (F67), then
   `configmaps`, `secrets`. Groups without objects are not shown.
 - **F61** Configuration (`configmaps`, `secrets`) comes last: a namespace
   can hold hundreds of them (Helm keeps one Secret per release revision),
   and they are for browsing, not for finding problems.
 - **F62** Kinds that can be broken get issues like workloads (Service
-  without endpoints, Ingress without address or with a missing backend,
-  PVC pending or lost). Kinds that can't (ConfigMap, Secret) show a muted
-  fact instead of `healthy` (`3 keys`), which would claim a check that never
-  ran. Services, Ingresses and PVCs show a muted fact when they are fine
-  (type and endpoints, hosts, size and storage class).
+  without endpoints, Ingress or Route without address or with a missing
+  backend, PVC pending or lost). Kinds that can't (ConfigMap, Secret) show
+  a muted fact instead of `healthy` (`3 keys`), which would claim a check
+  that never ran. Services, Ingresses and Routes show a muted fact when
+  they are fine (`2 endpoints`, the first host; PVCs: size and storage
+  class), cut to 24 columns.
 - **F63** Relations between resources are shown in the detail pane, not as
-  tree levels: a Service names the pods it selects and their workload, an
-  Ingress the Services it routes to, a PVC the pods that mount it. The tree
-  stays an ownership tree, so no object appears twice.
+  tree levels: a Service names the workloads (and bare pods) it selects,
+  an Ingress or Route the Services it routes to, a missing one marked; a
+  PVC *(planned)* the pods that mount it. The tree stays an ownership
+  tree, so no object appears twice.
 - **F64** Secret values are never shown unless the user reveals them on
   purpose, in the detail pane and in the YAML (F26) alike. Keys and sizes
-  are shown.
-- **F65** If listing a kind is forbidden (RBAC), its group shows `error`
+  are shown; the provider doesn't keep the values at all.
+- **F65** *(planned)* If listing a kind is forbidden (RBAC), its group shows `error`
   with the API server's message; the rest of the namespace loads normally.
+  Until then the kind is left out, and nothing derived from it is
+  claimed: without Services, no backend counts as missing.
 - **F66** Cluster-scoped resources: a `nodes` group at the top level, next
   to the namespaces, with issues per node (not ready, memory, disk or PID
   pressure, cordoned). PersistentVolumes are reached from their PVC.
-- **F67** *(UI implemented)* Custom resources (CRDs, e.g. OpenShift
-  Routes, cert-manager Certificates, Argo CD Applications) are listed in a
+- **F67** *(UI implemented)* Custom resources (CRDs, e.g. cert-manager
+  Certificates, Argo CD Applications; OpenShift Routes are a kind of
+  their own, F60) are listed in a
   `custom resources` **section** of their namespace: a selectable row that
   is collapsed until it is expanded, like a namespace, with `[n]` and the
   issues below it when collapsed, but no state word of its own. Inside it,
@@ -121,7 +128,8 @@ See [P14](decisions.md#p14-resources-beyond-workloads) and the
 
 - **F10** Each object shows at most **one** state word: the most severe
   issue, plus `+n` if there are more. Objects without issues show a muted
-  `healthy` (`completed` for a pod that ran to completion). See
+  `healthy` (`completed` for a pod that ran to completion; a fact for the
+  kinds of F62). See
   [state-model.md](state-model.md) for the rules.
 - **F11** Workloads show ready/desired replicas (`2/3`), pods ready/total
   containers (`0/1`). Every object shows its age, like kubectl (`25m`, `3d`).
@@ -134,7 +142,10 @@ See [P14](decisions.md#p14-resources-beyond-workloads) and the
   issue in words with an explanation (naming the container it is about).
 - **F21** For workloads: ready and updated replicas. For pods: phase, node,
   and per container its state (`running`, `CrashLoopBackOff`, …), restarts
-  with the last termination reason and when, and the image.
+  with the last termination reason and when, and the image. For Services:
+  type, selector, ready endpoints, what it selects. For Ingresses and
+  Routes: hosts, addresses, the Services they route to. For ConfigMaps and
+  Secrets: the type (Secrets) and every key with the size of its value.
 - **F22** The recent **warning events** of the object, newest first: age,
   reason, count and message; at most five, the rest summarized.
 - **F23** Number of children and the issues below them. A namespace also
