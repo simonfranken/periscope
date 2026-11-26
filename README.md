@@ -65,6 +65,7 @@ so log in with kubectl first.
 | `home` `end` / `g` `G`, `pgup` `pgdn` | Jump, page |
 | `!` | Problems only |
 | `/` | Filter what the current level shows: namespaces, or kind and name inside one |
+| `v` | The log of a pod or workload on the whole screen (the one that matters, e.g. a crashloop's crashed run; previewed in the detail pane). There: `tab` container, `p` previous run, `/` filter, drag to select lines, `c` copies |
 | `c` | Copy the name (`deployment/api`) |
 | `C` | Switch the kubeconfig context (periscope only; the kubeconfig is never written) |
 | `r` | Reload |
