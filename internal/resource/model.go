@@ -133,6 +133,9 @@ type Status struct {
 	Phase      Phase
 	Node       string
 	Containers []Container
+	// DefaultContainer is the container kubectl picks for logs and exec
+	// (the kubectl.kubernetes.io/default-container annotation), "" if unset.
+	DefaultContainer string
 
 	// Custom resources only: status.conditions. Pods and workloads carry
 	// their state in the fields above, so their conditions are not read.

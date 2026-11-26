@@ -33,3 +33,18 @@ type Switcher interface {
 	// cluster: like at startup, the tree loads afterwards (N1).
 	Switch(name string) (Provider, error)
 }
+
+// Logger is an optional capability of a Provider: the log of a container.
+type Logger interface {
+	// Logs opens the log r asks for. The stream follows the log of a running
+	// container until ctx is done; the log of a previous run or of a
+	// terminated container ends with io.EOF.
+	Logs(ctx context.Context, r LogRequest) (LogStream, error)
+}
+
+// LogStream is an open log.
+type LogStream interface {
+	// Next blocks until the next line; io.EOF once the log ends.
+	Next() (LogLine, error)
+	Close() error
+}

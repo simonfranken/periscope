@@ -41,6 +41,7 @@ type Provider struct {
 	start   string // --namespace, the one to list if namespaces can't be
 	server  string
 	client  kubernetes.Interface
+	logs    kubernetes.Interface // like client, without the request timeout, which would cut a followed log
 
 	mu   sync.Mutex
 	snap *snapshot // of the last Tree
@@ -94,7 +95,13 @@ func newFor(rules clientcmd.ClientConfigLoadingRules, raw clientcmdapi.Config, n
 	if err != nil {
 		return nil, err
 	}
-	return &Provider{rules: rules, raw: raw, context: name, ns: kctx.Namespace, server: cfg.Host, client: client}, nil
+	lcfg := rest.CopyConfig(cfg)
+	lcfg.Timeout = 0
+	logs, err := kubernetes.NewForConfig(lcfg)
+	if err != nil {
+		return nil, err
+	}
+	return &Provider{rules: rules, raw: raw, context: name, ns: kctx.Namespace, server: cfg.Host, client: client, logs: logs}, nil
 }
 
 // Contexts lists the kubeconfig's contexts sorted by name, as kubectl

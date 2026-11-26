@@ -47,8 +47,9 @@ namespace is the only one (F4). The context picker (`C`) switches between
 the kubeconfig's contexts. The UI: the cluster level and opening
 namespaces (`--namespace`), the tree (including custom resources, F67, so
 far on mock data only), the detail pane, the header, problems only (`!`),
-the filter (`/`), copy name (`c`), the full help and legend (`?`), and the
-update check. `periscope --mock` runs on built-in mock data (three mock
+the filter (`/`), copy name (`c`), logs (a preview in the detail pane, `v`
+on the whole screen, P19), the full help and legend (`?`), and the update
+check. `periscope --mock` runs on built-in mock data (three mock
 contexts, one of which can't be reached).
 
 Next steps, roughly in order:
@@ -65,9 +66,9 @@ Next steps, roughly in order:
    browsing, values hidden); nodes; discovering the custom resources (the
    UI for them is done). With them, a kind whose list is forbidden shows
    `error` (F65); for now it is left out.
-4. **Read actions**: logs (`v`, the previous container's logs for a
-   crashloop), describe (`d`), the YAML of an object and all its events
-   (not only warnings), in a pager.
+4. **Read actions**: describe (`d`), the YAML of an object and all its
+   events (not only warnings), in a pager. Logs are done (P19); merging
+   all containers of a pod into one log could follow.
 5. **Write actions**: restart a rollout (`t`), scale (`s`), delete a pod
    (`x`). Each asks first if something would be lost (submarine D23).
 6. A fixture for integration tests: a `kind` cluster script, like

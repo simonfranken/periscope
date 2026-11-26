@@ -156,7 +156,15 @@ indent ▸ name [n]   status          ready  age
    muted.
 5. `Warnings`: up to five events, newest first: age (muted), reason
    (yellow), `×count`, message; `… n more`.
-6. The palette at the bottom.
+6. `Logs` (pods and workloads): the log `v` would show (see [Logs](#logs)),
+   in the room that is left, at least three lines, else left out. The
+   title names the container (`Logs  app · previous run`), for a workload
+   also the pod it picked (`Logs  api-7b8d9f6c5-zp6qx · app`). Then the
+   last lines, cut with `…`: the time (muted), the text colored like in the
+   log view. It follows the log live. The log is opened once the selection
+   has rested for 200 ms, so moving through the tree doesn't open one per
+   row; meanwhile it shows the spinner.
+7. The palette at the bottom.
 
 For the cluster (header selected): `Server`, `Version`, `Namespaces`
 (count and the issues below) and `Issues below`.
@@ -200,7 +208,7 @@ colors in components.
 | Danger | ANSI `1` red, bold | `down`, `crashloop`, `oom killed`, `pull error`, `failed`, `error` |
 | Warn | ANSI `3` yellow | `pending`, `not ready`, `degraded`, `restarting`, event reasons, `problems only` |
 | Info | ANSI `4` blue | `rolling out`, `suspended`, `terminating` |
-| Primary | ANSI `5` magenta | the context, spinner, filter prompt |
+| Primary | ANSI `5` magenta | the context, spinner, filter prompt, filter matches in a log |
 | Muted | ANSI `8` grey | quiet rows, group headers, labels, ages, images |
 | Text | terminal default | normal text |
 | Border | ANSI `8` grey | pane and help separators |
@@ -251,6 +259,7 @@ colors in components.
 | `q`, `ctrl+c` | Quit. With a newer release: `q` quits and updates, `Q` and `ctrl+c` quit |
 | `r` | Reload everything |
 | `C` | Switch the kubeconfig context, see [Context picker](#context-picker) |
+| `v` | Show the log of the selection on the whole screen, see [Logs](#logs) |
 | `c` | Copy the name of the selection (`deployment/api`, a namespace's name, the context for the cluster) to the clipboard (OSC 52, works over SSH; in tmux `set -g set-clipboard on`). The footer confirms with `copied <name>` |
 | `/` | Open the filter, see [Filter](#filter) |
 | `!` | Toggle problems only, see [Problems only](#problems-only) |
@@ -342,6 +351,75 @@ dropped and it is drawn in `Backdrop`, so the popup has the focus.
   why (`can't reach prod-eu: <error>`), longer than other messages.
 - The kubeconfig is never written: the switch is periscope's alone.
 
+### Logs
+
+`v` on a pod or a workload shows its log on the whole screen (P19). It
+needs no choice: periscope picks the log that matters, the one the
+preview in the detail pane already shows, so it opens at once.
+
+```
+ kind-dev › shop › api-7b8d9f6c5-zp6qx   app  envoy        previous run · ended 2m ago (Error)
+ 10:41:02 level=info msg="starting" version=1.8.0
+ 10:41:02 level=info msg="connecting to database" host=postgres:5432
+ 10:41:07 level=error msg="dial tcp 10.96.14.2:5432: connect: connection refused"
+ 10:41:07 panic: database unreachable after 3 attempts
+ ↑↓/jk scroll • G last line • tab next container • p current run • / filter • w cut lines   ? help • q/esc back
+```
+
+- **Which log.** On a pod: the container its most severe issue names (the
+  crashlooping one, the one not ready), else the default container
+  (`kubectl.kubernetes.io/default-container`), else the first. On a
+  workload (deployment, statefulset, daemonset, job, cronjob): that of its
+  pod with the most severe issue, else of its newest pod. A container that
+  isn't running and has run before shows its **previous run**: a
+  crashloop's current run is empty or just starting, the crash is in the
+  run before. Namespaces, sections and custom resources have no log; `v`
+  is shown only where there is one.
+- **Header.** The breadcrumb to the pod (a click on the context goes back),
+  the pod's containers as tabs (the shown one on the `Selected`
+  background; a click shows another), and right-aligned the state:
+  `previous run · ended 2m ago (Error)`, `following`, `paused · G
+  follows`, `ended` (a terminated container), spinner and `loading`,
+  `error`; with a filter `n of m lines` first.
+- **Lines.** It starts with the last 1000 lines and keeps up to 10000.
+  The time (`15:04:05`, local, muted) in front; the text red for errors,
+  yellow for warnings (as programs write them: `level=error`, `ERROR`,
+  `panic`, klog's `E1125`, …, decided by `resource.LogLevel`), else the
+  default color, never bold. Escape sequences in the log are removed.
+- **Follow.** It opens at the end and follows new lines. Scrolling up
+  pauses it (the view stays put while lines arrive); scrolling to the end
+  or `G` follows again.
+- **Wrap.** Long lines wrap, indented below the time; `w` cuts them with
+  `…` instead (and back), for the session.
+- **Filter.** `/` shows only the lines containing the term, ignoring case,
+  matches in `Primary` bold; like the tree's filter, `enter` hands the keys
+  back and `esc` closes it.
+- **No log.** A container that hasn't started says why instead of an API
+  error: `app is waiting to start (ImagePullBackOff)`. Otherwise `loading
+  logs…`, `no logs yet`, `the log is empty`, `nothing matches`, or `error`
+  and the API server's message.
+- **Back.** `q`, `esc`, `⌫` or `←` go back to the tree with the same
+  selection (`esc` first closes the help, then the filter); `ctrl+c`
+  quits. The preview goes back to the picked log if another one was
+  chosen.
+
+| Key | Action |
+|---|---|
+| `↑` / `k`, `↓` / `j` | Scroll by a line (mouse wheel: three) |
+| `pgup`, `pgdn` / `space` | Scroll by a screen |
+| `home` / `g` | First line |
+| `end` / `G` | Last line, follow |
+| `tab`, `shift+tab` | Next / previous container (only with more than one) |
+| `p` | Current / previous run (only if the container has run before) |
+| `w` | Cut / wrap long lines |
+| `/` | Filter lines |
+| `?` | Full help |
+| `q`, `esc`, `⌫`, `←` / `h` | Back to the tree |
+| `ctrl+c` | Quit |
+
+`q` goes back here instead of quitting: the view is a pager, and `q`
+leaves a pager.
+
 ### Questions (planned)
 
 Actions that can lose something ask on the line above the footer: `Delete
@@ -363,6 +441,7 @@ the full help.
 | `space` | Toggle expand/collapse | Navigation | Bar, Help |
 | `home` / `g`, `end` / `G` | Header / last object | Navigation | Help |
 | `pgup`, `pgdn` | Move by one screen | Navigation | Help |
+| `v` | Logs on the whole screen (pods and workloads), see [Logs](#logs) | Resource | Palette, Help |
 | `c` | Copy name | Resource | Palette, Help |
 | `!` | Problems only (toggle) | Tools | Bar, Help |
 | `/` | Filter | Tools | Bar, Help |
@@ -377,7 +456,6 @@ Planned, not implemented (keys reserved):
 
 | Key | Action | Group |
 |---|---|---|
-| `v` | View the logs of a pod (the previous container's for a crashloop), in a pager | Resource |
 | `d` | Describe, in a pager | Resource |
 | `e` | Edit in `$EDITOR` | Resource |
 | `s` | Scale a workload | Resource |

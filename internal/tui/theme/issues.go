@@ -154,6 +154,18 @@ func (t Theme) PodMarker(o *resource.Object, base lipgloss.Style) string {
 	return base.Foreground(t.Muted).Render(t.Glyphs.Pod)
 }
 
+// LogStyle is the style of a log line of level l: its level color, not
+// bold, so a log with many errors stays readable.
+func (t Theme) LogStyle(l resource.Level) lipgloss.Style {
+	switch l {
+	case resource.LevelDanger:
+		return Fg(t.Danger)
+	case resource.LevelWarn:
+		return Fg(t.Warn)
+	}
+	return Fg(t.Text)
+}
+
 func (t Theme) LevelStyle(l resource.Level, base lipgloss.Style) lipgloss.Style {
 	switch l {
 	case resource.LevelDanger:

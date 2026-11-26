@@ -2,6 +2,7 @@ package kube
 
 import (
 	"context"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -74,7 +75,7 @@ func fixture() []runtime.Object {
 }
 
 func provider(client *fake.Clientset, ns string) *Provider {
-	return &Provider{context: "kind-dev", ns: ns, server: "https://127.0.0.1:6443", client: client}
+	return &Provider{context: "kind-dev", ns: ns, server: "https://127.0.0.1:6443", client: client, logs: client}
 }
 
 func paths(c *resource.Cluster) map[string]*resource.Object {
@@ -262,5 +263,35 @@ func TestContexts(t *testing.T) {
 	}
 	if _, err := p.Switch("x"); err == nil {
 		t.Error("switched to a context that doesn't exist")
+	}
+}
+
+func TestLogs(t *testing.T) {
+	p := provider(fake.NewClientset(fixture()...), "")
+	pod := &resource.Object{Kind: resource.KindPod, Namespace: "shop", Name: "api-7b8-x"}
+	s, err := p.Logs(context.Background(), resource.LogRequest{Pod: pod, Container: "app", Tail: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	l, err := s.Next()
+	if err != nil || l.Text != "fake logs" { // what the fake client answers
+		t.Errorf("got %+v, %v", l, err)
+	}
+	if _, err := s.Next(); err != io.EOF {
+		t.Errorf("the log should end, got %v", err)
+	}
+}
+
+func TestParseLogLine(t *testing.T) {
+	l := parseLogLine("2026-11-25T10:41:02.123456789Z level=info msg=\"up\"")
+	if l.Text != `level=info msg="up"` || !l.Time.Equal(time.Date(2026, 11, 25, 10, 41, 2, 123456789, time.UTC)) {
+		t.Errorf("got %+v", l)
+	}
+	if l := parseLogLine("no timestamp here"); l.Text != "no timestamp here" || !l.Time.IsZero() {
+		t.Errorf("without a timestamp the line stays whole: %+v", l)
+	}
+	if l := parseLogLine("2026-11-25T10:41:02Z"); l.Text != "" || l.Time.IsZero() {
+		t.Errorf("an empty line: %+v", l)
 	}
 }

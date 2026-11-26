@@ -45,9 +45,18 @@ func (m *Model) SetActions(actions []key.Binding) { m.actions = actions }
 func (m *Model) SetSize(w, h int)        { m.width, m.height = w, h }
 func (m *Model) SetSpinner(frame string) { m.spinner = frame }
 
+// LogPreview renders the last lines of a log in at most n lines of width w.
+type LogPreview interface {
+	Preview(w, n int) []string
+}
+
+// minLogLines is the room the log preview needs: its title and two lines.
+const minLogLines = 3
+
 // View renders o; c is the loaded cluster (nil while loading), which the
-// cluster's own view needs for its summary.
-func (m Model) View(o *resource.Object, c *resource.Cluster) string {
+// cluster's own view needs for its summary. log is the preview of o's log,
+// nil if it has none; it fills the room below the rest, if there is some.
+func (m Model) View(o *resource.Object, c *resource.Cluster, log LogPreview) string {
 	if m.width <= 0 || m.height <= 0 {
 		return ""
 	}
@@ -63,6 +72,12 @@ func (m Model) View(o *resource.Object, c *resource.Cluster) string {
 	if m.PaletteVisible() && (o == nil || o.Kind != resource.KindSection) { // nothing to act on
 		palette = m.palette()
 		height -= len(palette) // the palette is at the bottom
+	}
+	if room := height - len(lines) - 2; log != nil && room >= minLogLines { // a blank line above, one below
+		lines = append(lines, "")
+		for _, l := range log.Preview(m.width, room) {
+			lines = append(lines, ansi.Truncate(l, m.width, "…"))
+		}
 	}
 	if len(lines) > height {
 		lines = lines[:height]

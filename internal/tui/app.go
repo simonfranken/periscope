@@ -17,6 +17,7 @@ import (
 	"periscope/internal/tui/detail"
 	"periscope/internal/tui/footer"
 	"periscope/internal/tui/header"
+	"periscope/internal/tui/logs"
 	"periscope/internal/tui/picker"
 	"periscope/internal/tui/theme"
 	"periscope/internal/tui/tree"
@@ -68,6 +69,20 @@ type Model struct {
 
 	picker    *picker.Model // the context picker, nil if closed
 	switching string        // the context whose tree is loading, "" if none
+
+	// logs is the log of the selection, in the detail pane's preview, or on
+	// the whole screen while logView is set.
+	logs         logs.Model
+	logView      bool
+	lkeys        logKeys
+	logFilter    textinput.Model
+	logFiltering bool
+	logStarted   bool               // logs' target is opened, not waiting for the selection to rest
+	logID        int                // the open log's stream, 0 if none
+	logSeq       int                // the last stream's id
+	logDelay     int                // the last wait for the selection to rest
+	logCancel    context.CancelFunc // closes the open log
+	logCh        <-chan logItem
 }
 
 // WithNamespace starts inside the namespace name instead of the kubeconfig
@@ -99,6 +114,12 @@ func New(ctx context.Context, p resource.Provider, opts ...Option) Model {
 	fi.Cursor.Style = theme.Fg(t.Primary)
 	fi.Placeholder = "filter by namespace, kind or name"
 	fi.PlaceholderStyle = theme.Fg(t.Muted)
+	lf := textinput.New()
+	lf.Prompt = "/ "
+	lf.PromptStyle = theme.Fg(t.Primary)
+	lf.Cursor.Style = theme.Fg(t.Primary)
+	lf.Placeholder = "show only lines with"
+	lf.PlaceholderStyle = theme.Fg(t.Muted)
 	pctx, pcancel := context.WithCancel(ctx)
 	m := Model{
 		ctx:         ctx,
@@ -115,6 +136,9 @@ func New(ctx context.Context, p resource.Provider, opts ...Option) Model {
 		spinner:     sp,
 		filter:      fi,
 		hint:        true,
+		logs:        logs.New(t),
+		lkeys:       defaultLogKeys(),
+		logFilter:   lf,
 	}
 	for _, o := range opts {
 		o(&m)
@@ -154,7 +178,7 @@ func (m Model) busy() bool {
 	if m.cluster == nil {
 		return true
 	}
-	loading := m.switching != "" || (m.picker != nil && m.picker.Loading()) ||
+	loading := m.switching != "" || (m.picker != nil && m.picker.Loading()) || m.logs.Loading() ||
 		m.cluster.Root != nil && m.cluster.Root.Status == nil && m.cluster.Root.Err == nil
 	resource.Walk(m.cluster.Objects, func(o *resource.Object) {
 		loading = loading || (o.Status == nil && o.Err == nil)
@@ -171,7 +195,17 @@ func (m *Model) tick() tea.Cmd {
 	return m.spinner.Tick
 }
 
+// Update handles msg, then lets the log follow the selection.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	next, cmd := m.handle(msg)
+	mm := next.(Model)
+	if c := mm.syncLogs(); c != nil {
+		cmd = tea.Batch(cmd, c)
+	}
+	return mm, cmd
+}
+
+func (m Model) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -199,6 +233,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case switchedMsg:
 		return m.switched(msg)
 
+	case logLinesMsg:
+		return m.logLines(msg)
+
+	case logDelayMsg:
+		if msg.seq != m.logDelay || m.logStarted {
+			return m, nil
+		}
+		return m, m.startLogs(m.logs.Target())
+
 	case statusLoadedMsg:
 		if msg.from != m.provider {
 			return m, nil
@@ -218,6 +261,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		m.tree.SetSpinner(m.spinner.View())
 		m.detail.SetSpinner(m.spinner.View())
+		m.logs.SetSpinner(m.spinner.View())
 		if m.picker != nil {
 			m.picker.SetSpinner(m.spinner.View())
 		}
@@ -231,6 +275,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.picker != nil {
 			return m.mousePicker(msg)
 		}
+		if m.logView {
+			return m.logMouse(msg)
+		}
 		m.tree.Update(msg)
 		m.syncLevel()
 		return m, nil
@@ -238,6 +285,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if m.picker != nil {
 			return m.pickContext(msg)
+		}
+		if m.logView {
+			if m.hint {
+				m.hint = false
+			}
+			return m.logKey(msg)
 		}
 		next, cmd := m.handleKey(msg)
 		mm := next.(Model)
@@ -369,6 +422,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.loadTree()
 	case key.Matches(msg, k.Copy):
 		return m.copyName()
+	case key.Matches(msg, k.Logs):
+		return m.openLogs()
 	case key.Matches(msg, k.Filter):
 		m.filtering = true
 		m.layout()
@@ -458,6 +513,9 @@ func (m Model) filterView() string {
 // extraLine reports whether a line above the footer is shown: the filter,
 // the notice that only problems are shown, or the hint for newcomers.
 func (m Model) extraLine() bool {
+	if m.logView {
+		return m.logFiltering
+	}
 	return m.switching != "" || m.filtering || m.tree.ProblemsOnly() || m.hint
 }
 
@@ -511,6 +569,11 @@ func (m *Model) layout() {
 		bodyHeight--
 	}
 	bodyHeight = max(bodyHeight, 0)
+	if m.logView {
+		m.footer.SetActions(false)
+		m.logs.SetSize(m.width, bodyHeight)
+		return
+	}
 
 	m.showDetail = m.width >= detailHideBelow
 	treeWidth := m.width
@@ -531,13 +594,22 @@ func (m Model) View() string {
 		return theme.Fg(m.theme.Danger).Render("error: " + m.err.Error())
 	}
 
+	if m.logView {
+		head := m.logs.Header(m.cluster.Context, logZones, logBackZone)
+		parts := []string{head, m.logs.View()}
+		if m.logFiltering {
+			parts = append(parts, m.logFilterView())
+		}
+		return zone.Scan(lipgloss.JoinVertical(lipgloss.Left, append(parts, m.footer.View())...))
+	}
+
 	body := m.tree.View()
 	if m.showDetail {
 		pane := lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder(), false, false, false, true).
 			BorderForeground(m.theme.Border).
 			PaddingLeft(1).
-			Render(m.detail.View(m.tree.Selected(), m.cluster))
+			Render(m.detail.View(m.tree.Selected(), m.cluster, m.logPreview()))
 		body = lipgloss.JoinHorizontal(lipgloss.Top, body, pane)
 	}
 
@@ -560,4 +632,12 @@ func (m Model) View() string {
 		view = overlay(view, pop, x, y, theme.Fg(m.theme.Backdrop))
 	}
 	return view
+}
+
+// logPreview is the preview of the selection's log, nil if it has none.
+func (m Model) logPreview() detail.LogPreview {
+	if !m.keys.logs {
+		return nil
+	}
+	return m.logs
 }

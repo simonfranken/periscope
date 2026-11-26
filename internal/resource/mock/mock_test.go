@@ -2,6 +2,8 @@ package mock
 
 import (
 	"context"
+	"io"
+	"strings"
 	"testing"
 
 	"periscope/internal/resource"
@@ -74,5 +76,63 @@ func TestUnreachableContextFails(t *testing.T) {
 	}
 	if _, err := s.Tree(context.Background()); err == nil {
 		t.Error("prod-eu's tree should fail like a login that needs a browser")
+	}
+}
+
+func TestLogs(t *testing.T) {
+	p := New()
+	c, _ := p.Tree(context.Background())
+	byName := map[string]*resource.Object{}
+	resource.Walk(c.Objects, func(o *resource.Object) { byName[o.Name] = o })
+	ctx := context.Background()
+
+	crash := byName["api-7b8d9f6c5-zp6qx"]
+	s, err := p.Logs(ctx, resource.LogRequest{Pod: crash, Container: "app", Previous: true, Tail: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lines []resource.LogLine
+	for {
+		l, err := s.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		lines = append(lines, l)
+	}
+	if len(lines) != 20 {
+		t.Errorf("tail 20: got %d lines", len(lines))
+	}
+	panicked := false
+	for _, l := range lines {
+		panicked = panicked || strings.HasPrefix(l.Text, "panic:")
+	}
+	if !panicked {
+		t.Error("the crashed run should end with its panic")
+	}
+
+	if _, err := p.Logs(ctx, resource.LogRequest{Pod: crash, Container: "app"}); err == nil || !strings.Contains(err.Error(), "waiting to start") {
+		t.Errorf("the current run of a waiting container: %v", err)
+	}
+	if _, err := p.Logs(ctx, resource.LogRequest{Pod: byName["web-6c5d8f7b9-b4m8n"], Container: "app", Previous: true}); err == nil {
+		t.Error("a container that never restarted has no previous run")
+	}
+
+	// a running container's log goes on
+	lctx, cancel := context.WithCancel(ctx)
+	s, err = p.Logs(lctx, resource.LogRequest{Pod: byName["web-6c5d8f7b9-b4m8n"], Container: "app", Tail: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if _, err := s.Next(); err != nil {
+			t.Fatalf("a followed log should go on: %v", err)
+		}
+	}
+	cancel()
+	if _, err := s.Next(); err == nil {
+		t.Error("a cancelled log should end")
 	}
 }

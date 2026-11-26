@@ -298,3 +298,31 @@ fonts. Green for healthy: the theme has no success color, and healthy
 rows stay quiet.
 **Consequences.** One exception to principle 3; the name column doesn't
 move. A pod that ever gets children would show its toggle instead.
+
+## P19: Logs: the one that matters, previewed, one key to read it
+
+**Context.** Reading logs is the most common next step after spotting a
+problem. kubectl makes the user name the pod, the container and
+`--previous`; a pod with sidecars, a crashloop whose current run is empty,
+and a deployment with many pods each cost another try.
+**Decision.** periscope picks the log (`resource.PickLog`): the container
+the pod's most severe issue names, else the default container, else the
+first; the previous run if the container isn't running and has run
+before; for a workload its worst pod, else its newest. The detail pane
+previews it live, so the log is visible without a key, and `v` opens the
+same log on the whole screen at once. There, one container at a time:
+`tab` switches containers, `p` the run, `/` filters lines (as `/` filters
+the tree), `w` cuts or wraps. Error and warning lines are colored; which
+are is decided by `resource.LogLevel`. `q` goes back, as in a pager.
+**Alternatives.** All containers merged with prefixes: sidecars bury the
+app's lines; possible later as an extra mode. Containers side by side:
+log lines need the width. A popup: too small to read in. An external
+pager (`less`): leaves the app, no following, no switching, nothing on
+Windows. Search with `n`/`N` instead of a filter: a filter is what users
+do with `kubectl logs | grep`, and it is periscope's `/` already. A choice
+of container before the log: one more step for the common case.
+**Consequences.** One log is open at a time; the preview opens it 200 ms
+after the selection rests and closes it when the selection moves on. On
+a real cluster that is one follow request per resting selection on a pod
+or workload. Init containers aren't listed yet (README step 7), so their
+logs can't be shown.

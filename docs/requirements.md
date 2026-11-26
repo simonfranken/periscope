@@ -144,6 +144,10 @@ See [P14](decisions.md#p14-resources-beyond-workloads) and the
 - **F25** The cluster (header selected): server, version, number of
   namespaces and the issues below, per level and per issue kind (one line
   per kind with the number of objects).
+- **F28** For a pod or a workload, the rest of the pane previews the log
+  periscope picks for it (F59): its last lines, with the container (and
+  the pod, for a workload) in the title, followed live. It is left out if
+  fewer than three lines fit.
 - **F26** *(planned)* The YAML of the selected object, as `kubectl get -o
   yaml` shows it, in a pager.
 - **F27** *(planned)* All events of the selected object (normal and
@@ -191,9 +195,21 @@ See [P14](decisions.md#p14-resources-beyond-workloads) and the
   a message. The kubeconfig is never written. See
   [Context picker](ux-guide.md#context-picker).
 
+- **F59** `v` shows a log on the whole screen, picked without asking (P19):
+  for a pod the container its most severe issue is about, else the
+  default container (`kubectl.kubernetes.io/default-container`), else the
+  first; for a workload its pod with the most severe issue, else its
+  newest. A container that isn't running and has run before shows its
+  previous run (a crashloop's crash). The view follows new lines, scrolls,
+  filters lines (`/`), wraps or cuts them (`w`), switches to the pod's
+  other containers (`tab`) and between the current and the previous run
+  (`p`). Errors and warnings in the log are colored. A container that
+  hasn't started says so instead of an API error. See
+  [Logs](ux-guide.md#logs).
+
 ### Planned actions
 
-See [ux-guide.md](ux-guide.md#key-reference) for their keys: logs, describe,
+See [ux-guide.md](ux-guide.md#key-reference) for their keys: describe,
 restart a rollout, scale, delete a pod.
 
 ## Usage

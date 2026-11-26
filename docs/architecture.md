@@ -15,12 +15,14 @@ cmd/periscope/main.go          wiring: choose the provider (--mock, --context), 
 internal/resource/             domain model; NO UI imports
   model.go                     Cluster, Object, Kind, Status, Container, Event, Walk
   status.go                    Issues(), levels, HiddenIssues()
-  provider.go                  Provider interface
-internal/resource/mock/        fixture cluster with every issue word, artificial latency
+  provider.go                  Provider interface, optional Switcher and Logger
+  logs.go                      LogRequest, LogTarget, PickLog (which log matters), LogLevel of a line
+internal/resource/mock/        fixture cluster with every issue word, artificial latency, made-up logs
 internal/resource/kube/        provider using client-go
   kube.go                      kubeconfig, client, Switcher
   tree.go                      Tree: lists, owner links, snapshot; Status
   status.go                    each kind's Status, warning events
+  logs.go                      Logs: kubectl logs --timestamps --follow, on a client without the request timeout
   stderr.go                    Quiet: klog, API warnings and exec plugins' stderr kept off the terminal
 internal/update/               self-update from GitHub releases; NO UI imports
 internal/tui/                  Bubble Tea application
@@ -28,9 +30,11 @@ internal/tui/                  Bubble Tea application
   keys.go                      key bindings (also feed the help view)
   msgs.go                      tree/status/update messages
   clipboard.go                 OSC 52
+  logview.go                   log streams, the preview following the selection, the log view's keys
   theme/                       colors, glyphs, issue words and texts, level styles, legend
   tree/                        tree component: rows, group headers, navigation, filter, mouse, view
-  detail/                      detail pane and its palette
+  detail/                      detail pane, its log preview and palette
+  logs/                        a log's lines: the full-screen view (scroll, follow, wrap, filter), its header, the preview
   header/                      header line
   footer/                      key bar (navigation and tools left, global right), full help pages, flash messages
 ```
@@ -89,19 +93,43 @@ old context never lands in the new tree. The mock has three contexts
 (`kind-dev`, `staging` with namespace `shop`, and `prod-eu`, whose `Tree`
 fails like an exec plugin that needs a browser).
 
+```go
+type Logger interface {
+    Logs(ctx context.Context, r LogRequest) (LogStream, error) // {Pod, Container, Previous, Tail}
+}
+type LogStream interface {
+    Next() (LogLine, error) // blocks; io.EOF when the log ends
+    Close() error
+}
+```
+
+A running container's log is followed until `ctx` is done; a previous
+run's or a terminated container's ends with `io.EOF`. Which log to show is
+decided in `resource.PickLog` (P19), how a line reads in
+`resource.LogLevel`. The app reads a log in a goroutine (`pump`) into a
+channel and takes what is ready per message (`logLinesMsg`, up to 2000
+lines), so a log's start arrives at once and a busy log doesn't flood the
+loop. Each opened log has an id; lines of a log closed meanwhile (the
+selection moved on, another container) are dropped, and closing cancels
+its context. The preview opens the picked log once the selection rested
+for 200 ms (`logDelayMsg`); `v` reuses it, so the log view opens with its
+lines. One log is open at a time, in the provider's context, so switching
+the context closes it. The kube provider reads logs with a second client
+without `rest.Config.Timeout`, which would cut a followed log after 30 s.
+
 Planned:
 
 ```go
 type Watcher interface {
     Watch(ctx context.Context) <-chan Change // {Path, Structure}: reload one status, or the tree
 }
-type Logger interface {
-    Logs(ctx context.Context, path, container string, previous bool) (io.ReadCloser, error)
-}
 ```
 
 The mock provider (`internal/resource/mock`) covers every issue word and
-sleeps 100–800 ms per `Status` call to exercise the loading path.
+sleeps 100–800 ms per `Status` call to exercise the loading path. Its logs
+are made up per image (requests, the crashlooping run's panic, the
+OOM-killed postgres, the failed migration) and go on every few seconds for
+running containers.
 
 ### Kubernetes provider
 

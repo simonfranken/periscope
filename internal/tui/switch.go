@@ -147,6 +147,13 @@ func (m Model) switched(msg switchedMsg) (tea.Model, tea.Cmd) {
 	m.pcancel() // the old provider's requests stop
 	m.provider, m.pctx, m.pcancel = msg.p, msg.pctx, msg.pcancel
 	m.cluster, m.byPath = nil, nil // a new cluster: treeLoaded starts afresh
+	m.stopLogs()
+	m.logs.Clear()
+	m.logStarted = false
+	if m.logView {
+		next, _ := m.closeLogs()
+		m = next.(Model)
+	}
 	if m.filtering {
 		m.closeFilter()
 	}

@@ -13,10 +13,11 @@ type keyMap struct {
 	Home, End, PageUp, PageDown   key.Binding
 	Reload, Filter, Issues        key.Binding
 	Context                       key.Binding
-	Copy                          key.Binding
+	Copy, Logs                    key.Binding
 	Help, Quit, QuitUpdate        key.Binding
 
 	inside bool // the tree shows a namespace (or section), not the cluster level
+	logs   bool // the selection has a log
 }
 
 func defaultKeys() keyMap {
@@ -39,6 +40,7 @@ func defaultKeys() keyMap {
 		Issues:        key.NewBinding(key.WithKeys("!"), key.WithHelp("!", "problems only")),
 		Context:       key.NewBinding(key.WithKeys("C"), key.WithHelp("C", "context")),
 		Copy:          key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "copy name")),
+		Logs:          key.NewBinding(key.WithKeys("v"), key.WithHelp("v", "logs")),
 		Help:          key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 		Quit:          key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
 		QuitUpdate:    key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit and update"), key.WithDisabled()),
@@ -75,7 +77,12 @@ func (k keyMap) Tools() []key.Binding {
 
 // Resource returns the bindings that act on the selected object. They are
 // shown in the detail pane, or in the footer if the pane can't show them.
-func (k keyMap) Resource() []key.Binding { return []key.Binding{k.Copy} }
+func (k keyMap) Resource() []key.Binding {
+	if k.logs {
+		return []key.Binding{k.Logs, k.Copy}
+	}
+	return []key.Binding{k.Copy}
+}
 
 // Global returns the bindings that don't depend on the selection.
 func (k keyMap) Global() []key.Binding { return []key.Binding{k.Help, k.Quit} }
@@ -104,7 +111,7 @@ func (k keyMap) HelpGroups() []footer.Group {
 	return []footer.Group{
 		{Title: "Move", Keys: []key.Binding{k.Up, k.Down, k.Left, k.Right, k.Enter, k.Toggle, k.CollapseBelow, k.ExpandBelow, k.Back}},
 		{Title: "Jump", Keys: []key.Binding{k.Home, k.End, k.PageUp, k.PageDown}},
-		{Title: "Selected", Keys: k.Resource()},
+		{Title: "Selected", Keys: []key.Binding{k.Logs, k.Copy}},
 		{Title: "Everything", Keys: []key.Binding{k.Issues, k.Filter, k.Context, k.Reload}},
 		{Title: "App", Keys: append([]key.Binding{help, esc, k.Quit}, k.fullUpdate()...)},
 	}

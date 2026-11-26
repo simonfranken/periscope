@@ -66,7 +66,8 @@ func cronJobStatus(c *batchv1.CronJob) *resource.Status {
 // podStatus lists the containers in the order of the spec, with the image
 // the spec names (the status may name a resolved digest).
 func podStatus(p *corev1.Pod) *resource.Status {
-	st := &resource.Status{Phase: resource.Phase(p.Status.Phase), Node: p.Spec.NodeName}
+	st := &resource.Status{Phase: resource.Phase(p.Status.Phase), Node: p.Spec.NodeName,
+		DefaultContainer: p.Annotations["kubectl.kubernetes.io/default-container"]}
 	for _, c := range p.Spec.Containers {
 		ct := resource.Container{Name: c.Name, Image: c.Image}
 		i := slices.IndexFunc(p.Status.ContainerStatuses, func(s corev1.ContainerStatus) bool { return s.Name == c.Name })
