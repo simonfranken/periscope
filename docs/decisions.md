@@ -282,3 +282,19 @@ fresh as the last `Tree` until watches come. A kind the user may not list
 is missing silently until F65's `error` group exists. A user who may list
 namespaces but no kind cluster-wide costs one List per kind and namespace;
 with hundreds of namespaces that can exceed `Tree`'s 45 s.
+
+## P18: A marker for pods
+
+**Context.** Inside a namespace, workloads and their pods sit in one tree
+and look alike; only the indent tells a pod (what actually runs
+containers) from the object that owns it.
+**Decision.** A pod shows `●` (ASCII `o`) in its toggle column, which is
+blank for leaves, in the color of its most severe issue (red if it failed
+to load), muted while healthy. The legend lists it under `Symbols`.
+**Alternatives.** A kind word or column: costs width on every row. Icons
+for every kind: a legend to learn, against "words over symbols". The
+hexagon `⬢` Kubernetes draws pods as: rendered unevenly in terminal
+fonts. Green for healthy: the theme has no success color, and healthy
+rows stay quiet.
+**Consequences.** One exception to principle 3; the name column doesn't
+move. A pod that ever gets children would show its toggle instead.

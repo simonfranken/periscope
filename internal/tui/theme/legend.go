@@ -68,6 +68,7 @@ func (t Theme) Legend() []LegendGroup {
 		{muted.Render("+n"), "n more issues"},
 		{Fg(t.Warn).Render(g.Problems + "k"), "issues below, collapsed"},
 		{muted.Render("[n]"), "children, collapsed"},
+		{muted.Render(g.Pod), "pod, runs containers"},
 		{muted.Render("3d"), "age"},
 	}}
 	return []LegendGroup{problems, other, symbols}

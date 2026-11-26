@@ -11,7 +11,8 @@ is the reference for periscope.
 2. **One word per row.** At most one state word in the tree (`+n` for more);
    the detail pane lists everything.
 3. **Words over symbols.** States are short words that need no legend.
-   Symbols are only used where they are conventional (`▸▾`, `n/m`).
+   Symbols are only used where they are conventional (`▸▾`, `n/m`), and
+   `●` marks the pods, the objects that run something (P18).
 4. **Meaning never depends on color alone** (every state has a word).
 5. **Follow the user's terminal theme.** Use ANSI 16 colors for meaning.
 6. **The screen explains itself.** Labels say what a key does, important
@@ -92,7 +93,7 @@ page at once (before it would close the filter):
 2. **Legend**: the words and symbols in their colors: `Problems` (the
    danger words), `Status` (the other issue words, `healthy`, `completed`,
    `unchecked`),
-   `Symbols` (`n/m`, `+n`, `·k`, `[n]`, the age). Then `App` with
+   `Symbols` (`n/m`, `+n`, `·k`, `[n]`, `●`, the age). Then `App` with
    `esc close`. The words come from `Theme.Legend()`, the levels from
    `IssueKind.Level()`, so they are the tree's.
 
@@ -113,7 +114,7 @@ indent ▸ name [n]   status          ready  age
 | Column | Width | Content |
 |---|---|---|
 | indent | 2 per depth | |
-| toggle | 3 | `▸` collapsed, `▾` expanded, blank for leaves |
+| toggle | 3 | `▸` collapsed, `▾` expanded, `●` for a pod (in the color of its most severe issue, muted while healthy), blank for other leaves |
 | name | fits the widest visible name | name, `[n]` = direct children (collapsed only) |
 | status | the widest visible status, at least 16 | issue word, `+n`, `·k` hidden issues per level (red, yellow, blue); muted `healthy` / `completed` / `unchecked` without issues; spinner while loading; `error` |
 | ready | 5, right-aligned | `ready/desired` replicas of a workload, `ready/total` containers of a pod |
@@ -396,6 +397,6 @@ restart: it sits next to `r` (reload), the reason submarine's restore is `x`
 
 ## Accessibility and terminals
 
-- `PERISCOPE_ASCII=1`: ASCII symbols (`> v . * >`) instead of Unicode.
+- `PERISCOPE_ASCII=1`: ASCII symbols (`> v . * > o`) instead of Unicode.
 - Many setups capture `ctrl+←/→`, so expand/collapse all below also work as
   `shift+→/←` and as `L` / `H`.

@@ -627,7 +627,6 @@ func (m Model) nodeLine(r row, nameColW, statusColW int) string {
 		}
 	}
 	indent := pad(len("  ") * r.depth)
-	toggle := zone.Mark(m.id+"toggle:"+s.Path, seg(t.Muted, " "+marker))
 
 	// Rows without issues are drawn muted so problems stand out.
 	issues := s.Status.Issues()
@@ -636,6 +635,14 @@ func (m Model) nodeLine(r row, nameColW, statusColW int) string {
 	if quiet && s != m.cursor {
 		textColor = t.Muted
 	}
+
+	// A pod, the object that actually runs something, is marked in the
+	// otherwise empty toggle column, in the color of its state.
+	toggle := seg(t.Muted, " "+marker)
+	if len(s.Children) == 0 && s.Kind == resource.KindPod {
+		toggle = pad(1) + t.PodMarker(s, base) + pad(1)
+	}
+	toggle = zone.Mark(m.id+"toggle:"+s.Path, toggle)
 
 	// name + child count
 	nameW := nameColW - 2*r.depth - 3

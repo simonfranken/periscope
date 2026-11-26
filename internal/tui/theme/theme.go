@@ -54,12 +54,13 @@ func Fg(c lipgloss.TerminalColor) lipgloss.Style {
 type Glyphs struct {
 	Collapsed, Expanded, Problems, Rule, Dot string
 	Crumb                                    string // between the parts of the header's breadcrumb
+	Pod                                      string // in the toggle column of a pod, which is a leaf
 }
 
 func Unicode() Glyphs {
-	return Glyphs{Collapsed: "▸", Expanded: "▾", Problems: "·", Rule: "─", Dot: "●", Crumb: "›"}
+	return Glyphs{Collapsed: "▸", Expanded: "▾", Problems: "·", Rule: "─", Dot: "●", Crumb: "›", Pod: "●"}
 }
 
 func ASCII() Glyphs {
-	return Glyphs{Collapsed: ">", Expanded: "v", Problems: ".", Rule: "-", Dot: "*", Crumb: ">"}
+	return Glyphs{Collapsed: ">", Expanded: "v", Problems: ".", Rule: "-", Dot: "*", Crumb: ">", Pod: "o"}
 }

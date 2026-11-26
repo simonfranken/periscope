@@ -139,6 +139,21 @@ func (t Theme) StatusWord(o *resource.Object, base lipgloss.Style, spinner strin
 }
 
 // LevelStyle returns base with the text color (and weight) for a level.
+// PodMarker renders the pod glyph of o in the color of its state: the
+// level of its most severe issue, Danger if it failed to load, muted while
+// healthy or loading (the status cell has the spinner).
+func (t Theme) PodMarker(o *resource.Object, base lipgloss.Style) string {
+	switch {
+	case o.Err != nil:
+		return t.LevelStyle(resource.LevelDanger, base).Render(t.Glyphs.Pod)
+	case o.Status != nil:
+		if issues := o.Status.Issues(); len(issues) > 0 {
+			return t.LevelStyle(issues[0].Level, base).Render(t.Glyphs.Pod)
+		}
+	}
+	return base.Foreground(t.Muted).Render(t.Glyphs.Pod)
+}
+
 func (t Theme) LevelStyle(l resource.Level, base lipgloss.Style) lipgloss.Style {
 	switch l {
 	case resource.LevelDanger:
