@@ -5,6 +5,7 @@ package logs
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -45,6 +46,11 @@ type Model struct {
 	matching      int   // the lines that match the filter
 	spinner       string
 	showPod       bool // the preview names the pod: it was picked for a workload
+
+	// selected is the range of selected lines, from anchor (where the drag
+	// started) to end, indexes into lines; selecting is false without one.
+	selecting   bool
+	anchor, end int
 }
 
 // row is one screen row of the view: a part of line.
@@ -83,6 +89,7 @@ func (m *Model) Reset(t resource.LogTarget) {
 	m.note = Note(t)
 	m.loading = m.note == "" && t.Pod != nil
 	m.offset, m.follow, m.matching = 0, true, 0
+	m.selecting = false
 }
 
 // SetTarget replaces the target with the same log of a newer object, e.g.
@@ -106,6 +113,11 @@ func (m *Model) Append(lines []resource.LogLine) {
 	}
 	if n := len(m.lines) - maxLines; n > 0 {
 		m.lines, m.levels = m.lines[n:], m.levels[n:]
+		m.anchor, m.end = m.anchor-n, m.end-n
+		if m.selecting && max(m.anchor, m.end) < 0 {
+			m.selecting = false // its lines were dropped
+		}
+		m.anchor, m.end = max(m.anchor, 0), max(m.end, 0)
 		m.rebuild()
 		return
 	}
@@ -182,6 +194,7 @@ func (m *Model) SetFilter(term string) {
 	}
 	m.filter = term
 	m.follow = true
+	m.selecting = false
 	m.rebuild()
 }
 
@@ -294,15 +307,28 @@ func (m Model) empty() string {
 
 func (m Model) renderRow(r row, w int) string {
 	t := m.theme
-	ts := strings.Repeat(" ", timeWidth)
+	base := lipgloss.NewStyle()
+	selected := m.isSelected(r.line)
+	if selected {
+		base = base.Background(t.Selected)
+	}
+	ts := base.Render(strings.Repeat(" ", timeWidth))
 	if l := m.lines[r.line]; r.first && !l.Time.IsZero() {
-		ts = theme.Fg(t.Muted).Render(l.Time.Local().Format("15:04:05")) + " "
+		ts = base.Foreground(t.Muted).Render(l.Time.Local().Format("15:04:05")) + base.Render(" ")
 	}
 	text := r.text
 	if !m.wrap {
 		text = ansi.Truncate(text, w, "…")
 	}
-	return " " + ts + m.highlight(text, t.LogStyle(m.levels[r.line]))
+	style := t.LogStyle(m.levels[r.line])
+	if selected {
+		style = style.Background(t.Selected)
+	}
+	out := base.Render(" ") + ts + m.highlight(text, style)
+	if selected { // the whole row, so the selection reads as lines
+		out += base.Render(strings.Repeat(" ", max(m.width-lipgloss.Width(out), 0)))
+	}
+	return out
 }
 
 // highlight renders text in style, the parts matching the filter in the
@@ -311,7 +337,7 @@ func (m Model) highlight(text string, style lipgloss.Style) string {
 	if m.filter == "" {
 		return style.Render(text)
 	}
-	match := theme.Fg(m.theme.Primary).Bold(true)
+	match := style.Foreground(m.theme.Primary).Bold(true)
 	lower, term := strings.ToLower(text), strings.ToLower(m.filter)
 	var b strings.Builder
 	for {
@@ -423,4 +449,107 @@ func (m Model) Preview(w, n int) []string {
 		out = append(out, strings.TrimPrefix(r, " "))
 	}
 	return out
+}
+
+// --- selection ---------------------------------------------------------------
+
+// maxCopy is how much text a copy takes at most: terminals and tmux limit
+// what OSC 52 may carry. Beyond it the last lines that fit are copied.
+const maxCopy = 1 << 20
+
+// lineAt is the line shown at row y of the view (0 is its first row). Below
+// the last row it is the last line.
+func (m Model) lineAt(y int) (int, bool) {
+	if len(m.rows) == 0 {
+		return 0, false
+	}
+	i := min(max(m.offset+y, 0), len(m.rows)-1)
+	return m.rows[i].line, true
+}
+
+// Press starts a selection at row y, or extends the one there is to it.
+func (m *Model) Press(y int, extend bool) {
+	l, ok := m.lineAt(y)
+	if !ok {
+		return
+	}
+	m.follow = false // the lines stay put while they are selected
+	if extend && m.selecting {
+		m.end = l
+		return
+	}
+	m.selecting, m.anchor, m.end = true, l, l
+}
+
+// Drag extends the selection to row y; above or below the view it scrolls.
+func (m *Model) Drag(y int) {
+	if !m.selecting {
+		return
+	}
+	switch {
+	case y < 0:
+		m.Scroll(-1)
+		y = 0
+	case y >= m.height:
+		m.Scroll(1)
+		y = m.height - 1
+	}
+	m.follow = false
+	if l, ok := m.lineAt(y); ok {
+		m.end = l
+	}
+}
+
+// Selecting reports whether lines are selected.
+func (m Model) Selecting() bool { return m.selecting }
+
+// ClearSelection removes the selection; it reports whether there was one.
+func (m *Model) ClearSelection() bool {
+	had := m.selecting
+	m.selecting = false
+	return had
+}
+
+func (m Model) isSelected(line int) bool {
+	return m.selecting && line >= min(m.anchor, m.end) && line <= max(m.anchor, m.end)
+}
+
+// SelectedText is the selected lines that match the filter, as text to
+// copy, and how many lines it has.
+func (m Model) SelectedText() (string, int, bool) {
+	if !m.selecting {
+		return "", 0, false
+	}
+	return m.text(min(m.anchor, m.end), max(m.anchor, m.end))
+}
+
+// ShownText is every line the view shows (those matching the filter), as
+// text to copy, and how many lines it has.
+func (m Model) ShownText() (string, int, bool) { return m.text(0, len(m.lines)-1) }
+
+// text is the lines from..to that match the filter, each with its time as
+// shown, unwrapped; the last ones up to maxCopy. cut reports whether lines
+// were left out for the limit.
+func (m Model) text(from, to int) (s string, n int, cut bool) {
+	term := strings.ToLower(m.filter)
+	var out []string
+	size := 0
+	for i := min(to, len(m.lines)-1); i >= max(from, 0); i-- {
+		l := m.lines[i]
+		if term != "" && !strings.Contains(strings.ToLower(l.Text), term) {
+			continue
+		}
+		line := l.Text
+		if !l.Time.IsZero() {
+			line = l.Time.Local().Format("15:04:05") + " " + line
+		}
+		if size+len(line)+1 > maxCopy {
+			cut = true
+			break
+		}
+		size += len(line) + 1
+		out = append(out, line)
+	}
+	slices.Reverse(out)
+	return strings.Join(out, "\n"), len(out), cut
 }

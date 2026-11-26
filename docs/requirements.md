@@ -203,7 +203,9 @@ See [P14](decisions.md#p14-resources-beyond-workloads) and the
   previous run (a crashloop's crash). The view follows new lines, scrolls,
   filters lines (`/`), wraps or cuts them (`w`), switches to the pod's
   other containers (`tab`) and between the current and the previous run
-  (`p`). Errors and warnings in the log are colored. A container that
+  (`p`). Errors and warnings in the log are colored. Dragging over lines
+  selects and copies them; `c` copies the selection, else every line shown
+  (with a filter, the matches). A container that
   hasn't started says so instead of an API error. See
   [Logs](ux-guide.md#logs).
 

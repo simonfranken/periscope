@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -191,5 +192,39 @@ func runAll(cmd tea.Cmd) {
 			}
 		}
 	case <-time.After(100 * time.Millisecond): // a tick
+	}
+}
+
+func TestDragCopiesLines(t *testing.T) {
+	m := loaded(t, "shop")
+	var term bytes.Buffer
+	m.clipboard = &term
+	m.tree.Down() // web: a running pod with a log that goes on
+	m = press(m, "v")
+	var lines []resource.LogLine
+	for i := range 50 {
+		lines = append(lines, resource.LogLine{Text: fmt.Sprintf("line %d", i)})
+	}
+	next, _ := m.Update(logLinesMsg{id: m.logID, lines: lines})
+	m = next.(Model)
+	mouse := func(a tea.MouseAction, y int) tea.Cmd {
+		next, cmd := m.Update(tea.MouseMsg{X: 5, Y: y, Action: a, Button: tea.MouseButtonLeft})
+		m = next.(Model)
+		return cmd
+	}
+	mouse(tea.MouseActionPress, 2)
+	mouse(tea.MouseActionMotion, 4)
+	runAll(mouse(tea.MouseActionRelease, 4))
+	if m.dragging || !m.logs.Selecting() {
+		t.Fatal("the release ends the drag, the lines stay selected")
+	}
+	b64 := strings.TrimSuffix(strings.TrimPrefix(term.String(), "\x1b]52;c;"), "\x07")
+	got, _ := base64.StdEncoding.DecodeString(b64)
+	if n := strings.Count(string(got), "\n") + 1; n != 3 || !strings.HasPrefix(string(got), "line ") {
+		t.Errorf("copied %q", got)
+	}
+	m = press(m, "esc")
+	if m.logs.Selecting() || !m.logView {
+		t.Error("esc drops the selection first")
 	}
 }

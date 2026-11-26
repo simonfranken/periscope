@@ -363,7 +363,7 @@ preview in the detail pane already shows, so it opens at once.
  10:41:02 level=info msg="connecting to database" host=postgres:5432
  10:41:07 level=error msg="dial tcp 10.96.14.2:5432: connect: connection refused"
  10:41:07 panic: database unreachable after 3 attempts
- ↑↓/jk scroll • G last line • tab next container • p current run • / filter • w cut lines   ? help • q/esc back
+ ↑↓/jk scroll • G last line • tab next container • p current run • c copy all • / filter • w cut lines   ? help • q/esc back
 ```
 
 - **Which log.** On a pod: the container its most severe issue names (the
@@ -394,12 +394,25 @@ preview in the detail pane already shows, so it opens at once.
 - **Filter.** `/` shows only the lines containing the term, ignoring case,
   matches in `Primary` bold; like the tree's filter, `enter` hands the keys
   back and `esc` closes it.
+- **Copy.** Dragging over lines selects them, whole lines (on the
+  `Selected` background), and copies them on release; the footer says
+  `copied 12 lines`. A click selects one line, `shift+click` extends the
+  selection. Dragging above or below the view scrolls. Selecting pauses
+  following, so the lines stay put. `c` copies the selection, else every
+  line shown: with a filter only the matches (`/ timeout`, then `c`); the
+  bar says which (`c copy selection`, `c copy matches`, `c copy all`).
+  Copied are the lines as written, not as wrapped, each with its time
+  (`10:41:07 level=error …`). At most 1 MiB, what terminals take by OSC
+  52: beyond it the last lines that fit, and the footer says so. The
+  terminal's own selection still works with `shift`+drag. `esc` drops the
+  selection (before the filter).
 - **No log.** A container that hasn't started says why instead of an API
   error: `app is waiting to start (ImagePullBackOff)`. Otherwise `loading
   logs…`, `no logs yet`, `the log is empty`, `nothing matches`, or `error`
   and the API server's message.
 - **Back.** `q`, `esc`, `⌫` or `←` go back to the tree with the same
-  selection (`esc` first closes the help, then the filter); `ctrl+c`
+  selection (`esc` first closes the help, then drops the selection, then
+  closes the filter); `ctrl+c`
   quits. The preview goes back to the picked log if another one was
   chosen.
 
@@ -413,6 +426,8 @@ preview in the detail pane already shows, so it opens at once.
 | `p` | Current / previous run (only if the container has run before) |
 | `w` | Cut / wrap long lines |
 | `/` | Filter lines |
+| drag, click, `shift+click` | Select lines and copy them |
+| `c` | Copy the selection, else every line shown |
 | `?` | Full help |
 | `q`, `esc`, `⌫`, `←` / `h` | Back to the tree |
 | `ctrl+c` | Quit |

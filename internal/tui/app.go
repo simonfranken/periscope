@@ -76,6 +76,7 @@ type Model struct {
 	// the whole screen while logView is set.
 	logs         logs.Model
 	logView      bool
+	dragging     bool // a mouse drag selects lines of the log
 	lkeys        logKeys
 	logFilter    textinput.Model
 	logFiltering bool

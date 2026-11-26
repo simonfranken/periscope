@@ -326,3 +326,26 @@ after the selection rests and closes it when the selection moves on. On
 a real cluster that is one follow request per resting selection on a pod
 or workload. Init containers aren't listed yet (README step 7), so their
 logs can't be shown.
+
+## P20: Copying logs: drag over lines, copied on release
+
+**Context.** Copying log lines into a ticket or a chat is the next step of
+debugging. The mouse belongs to periscope (clicks, the wheel), so the
+terminal's selection needs `shift`, and it copies screen rows: wrapped
+lines in pieces, the time column, padding.
+**Decision.** In the log view a drag selects whole lines and copies them
+on release, like Claude Code copies a selection; a click copies one line,
+`shift+click` extends. `c` copies the selection, else every line shown, so
+a filter and `c` copy the matches. The text is the lines as written,
+unwrapped, with their time, at most 1 MiB (the last lines that fit).
+**Alternatives.** Selecting characters: logs are copied as lines (a stack
+trace, an error and what led to it), and character selection in a view
+that wraps, scrolls and grows is fragile; the terminal's `shift`+drag
+remains for that. Selecting with the keyboard and a copy key: more keys
+for the common case; it can follow if it is missed. Copying on a key
+only: one more step after every selection.
+**Consequences.** Dragging past the edge scrolls one row per mouse
+movement, not while the mouse rests. OSC 52 is the only way to the
+clipboard so far: a terminal that refuses it copies nothing, and big
+copies are limited by what the terminal takes. A native fallback
+(`clip.exe`, `pbcopy`, `wl-copy`) for local sessions could follow.

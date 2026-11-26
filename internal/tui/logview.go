@@ -3,11 +3,13 @@ package tui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 
 	"periscope/internal/resource"
@@ -217,7 +219,10 @@ func (m Model) openLogs() (tea.Model, tea.Cmd) {
 		cmd = m.startLogs(t) // else the preview's log goes on
 	}
 	m.logView = true
+	m.dragging = false
 	m.logs.Open()
+	m.logs.ClearSelection()
+	m.syncCopyKey()
 	m.lkeys.set(m.logs.Target(), m.logs.Wrap())
 	m.footer.CloseHelp()
 	m.footer.SetKeys(m.lkeys)
@@ -245,6 +250,9 @@ func (m Model) logKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case m.footer.HelpOpen() && msg.Type == tea.KeyEsc:
 		m.footer.CloseHelp()
 		m.layout()
+	case m.logs.Selecting() && msg.Type == tea.KeyEsc:
+		m.logs.ClearSelection()
+		m.syncCopyKey()
 	case m.logFiltering && msg.Type == tea.KeyEsc:
 		m.closeLogFilter()
 	case key.Matches(msg, k.Quit):
@@ -272,6 +280,8 @@ func (m Model) logKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.cycleContainer(-1)
 	case key.Matches(msg, k.Run):
 		return m.toggleRun()
+	case key.Matches(msg, k.Copy):
+		return m.copyLog()
 	case key.Matches(msg, k.Wrap):
 		m.logs.ToggleWrap()
 		m.lkeys.set(m.logs.Target(), m.logs.Wrap())
@@ -345,6 +355,7 @@ func (m Model) typeLogFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.logFilter, cmd = m.logFilter.Update(msg)
 		m.logs.SetFilter(m.logFilter.Value())
+		m.syncCopyKey()
 		return m, cmd
 	}
 	return m, nil
@@ -355,6 +366,7 @@ func (m *Model) closeLogFilter() {
 	m.logFilter.Blur()
 	m.logFilter.Reset()
 	m.logs.SetFilter("")
+	m.syncCopyKey()
 	m.layout()
 }
 
@@ -369,8 +381,9 @@ func (m Model) logFilterView() string {
 	return m.line(m.logFilter.View(), hint)
 }
 
-// logMouse: the wheel scrolls, a tab shows its container, the context's
-// name goes back to the tree.
+// logMouse: the wheel scrolls; dragging over lines selects them and copies
+// them on release (a click: one line, shift+click extends); a tab shows
+// its container, the context's name goes back to the tree.
 func (m Model) logMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	switch msg.Button {
 	case tea.MouseButtonWheelUp:
@@ -380,7 +393,23 @@ func (m Model) logMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		m.logs.Scroll(3)
 		return m, nil
 	}
+	y := msg.Y - headerHeight // the row in the log's body
+	switch {
+	case m.dragging && msg.Action == tea.MouseActionMotion:
+		m.logs.Drag(y)
+		return m, nil
+	case m.dragging && msg.Action == tea.MouseActionRelease:
+		m.dragging = false
+		m.logs.Drag(y)
+		return m.copyLog()
+	}
 	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
+		return m, nil
+	}
+	if y >= 0 && y < m.logBodyHeight() {
+		m.logs.Press(y, msg.Shift)
+		m.dragging = m.logs.Selecting()
+		m.syncCopyKey()
 		return m, nil
 	}
 	if zone.Get(logBackZone).InBounds(msg) {
@@ -396,10 +425,58 @@ func (m Model) logMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// logBodyHeight is the number of rows the log's lines have.
+func (m Model) logBodyHeight() int {
+	h := m.height - headerHeight - lipgloss.Height(m.footer.View())
+	if m.logFiltering {
+		h--
+	}
+	return h
+}
+
+// copyLog copies the selected lines, else every line shown (with a filter:
+// those matching it).
+func (m Model) copyLog() (tea.Model, tea.Cmd) {
+	text, n, cut := m.logs.SelectedText()
+	if !m.logs.Selecting() {
+		text, n, cut = m.logs.ShownText()
+	}
+	m.syncCopyKey()
+	if n == 0 {
+		cmd := m.footer.Flash("nothing to copy")
+		return m, cmd
+	}
+	what := fmt.Sprintf("copied %d lines", n)
+	switch {
+	case cut:
+		what = fmt.Sprintf("copied the last %d lines, the most the clipboard takes", n)
+	case n == 1:
+		what = "copied 1 line"
+	}
+	return m, tea.Batch(m.copyToClipboard(text), m.footer.Flash(what))
+}
+
+// syncCopyKey says what c copies: the selection, or everything shown.
+func (m *Model) syncCopyKey() {
+	help := "copy all"
+	if m.logs.Filter() != "" {
+		help = "copy matches"
+	}
+	if m.logs.Selecting() {
+		help = "copy selection"
+	}
+	if m.lkeys.Copy.Help().Desc != help {
+		m.lkeys.Copy.SetHelp("c", help)
+		if m.logView {
+			m.footer.SetKeys(m.lkeys)
+		}
+	}
+}
+
 // logKeys are the keys of the log view.
 type logKeys struct {
 	Up, Down, PageUp, PageDown, Home, End key.Binding
-	Next, Prev, Run, Wrap, Filter         key.Binding
+	Next, Prev, Run, Wrap, Filter, Copy   key.Binding
 	Back, Help, Quit                      key.Binding
 
 	follow key.Binding // G in the bar: follow, or the last line of a log that ended
@@ -418,6 +495,7 @@ func defaultLogKeys() logKeys {
 		Run:      key.NewBinding(key.WithKeys("p"), key.WithHelp("p", "previous run")),
 		Wrap:     key.NewBinding(key.WithKeys("w"), key.WithHelp("w", "cut lines")),
 		Filter:   key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
+		Copy:     key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "copy all")),
 		Back:     key.NewBinding(key.WithKeys("esc", "q", "backspace", "left", "h"), key.WithHelp("q/esc", "back")),
 		Help:     key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 		Quit:     key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit")),
@@ -453,7 +531,7 @@ func (k logKeys) Navigation() []key.Binding {
 	return []key.Binding{scroll, k.follow, k.Next, k.Run}
 }
 
-func (k logKeys) Tools() []key.Binding     { return []key.Binding{k.Filter, k.Wrap} }
+func (k logKeys) Tools() []key.Binding     { return []key.Binding{k.Copy, k.Filter, k.Wrap} }
 func (k logKeys) Resource() []key.Binding  { return nil }
 func (k logKeys) Global() []key.Binding    { return []key.Binding{k.Help, k.Back} }
 func (k logKeys) Highlight() []key.Binding { return nil }
@@ -462,9 +540,13 @@ func (k logKeys) HelpGroups() []footer.Group {
 	help := key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "what words mean"))
 	esc := key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "close"))
 	back := key.NewBinding(key.WithKeys("q"), key.WithHelp("q/esc/⌫/←", "back to the tree"))
+	drag := key.NewBinding(key.WithKeys("mouse"), key.WithHelp("drag", "select lines, copy"))
+	extend := key.NewBinding(key.WithKeys("mouse"), key.WithHelp("⇧click", "extend the selection"))
+	cp := key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "copy selection, else all shown"))
 	return []footer.Group{
 		{Title: "Scroll", Keys: []key.Binding{k.Up, k.Down, k.PageUp, k.PageDown, k.Home, k.End}},
 		{Title: "Log", Keys: []key.Binding{k.Next, k.Prev, k.Run, k.Wrap, k.Filter}},
+		{Title: "Copy", Keys: []key.Binding{drag, extend, cp}},
 		{Title: "App", Keys: []key.Binding{help, esc, back, k.Quit}},
 	}
 }

@@ -138,3 +138,52 @@ func TestPreview(t *testing.T) {
 		t.Errorf("escape sequences and control characters are removed: %q", got)
 	}
 }
+
+func TestSelection(t *testing.T) {
+	m := newModel(30, 5)
+	m.Append([]resource.LogLine{{Text: "a"}, {Text: strings.Repeat("long ", 10)}, {Text: "c"}, {Text: "d"}})
+	// rows: a, long (3 rows), c, d; the view shows the last 5 rows
+	if len(m.rows) != 6 || m.offset != 1 {
+		t.Fatalf("%d rows, offset %d", len(m.rows), m.offset)
+	}
+	m.Press(0, false) // the first row of "long"
+	if !m.Selecting() || m.Following() {
+		t.Fatal("a press selects and pauses")
+	}
+	m.Drag(2) // its last row: still the same line
+	if s, n, _ := m.SelectedText(); n != 1 || s != strings.Repeat("long ", 10) {
+		t.Errorf("a wrapped line is copied whole: %q (%d)", s, n)
+	}
+	m.Drag(9) // below the view: scrolls, selects to the last line
+	if s, n, _ := m.SelectedText(); n != 3 || !strings.HasSuffix(s, "c\nd") {
+		t.Errorf("drag to the end: %q (%d)", s, n)
+	}
+	m.Drag(-1) // above the view: scrolls up, selects "a" too
+	if _, n, _ := m.SelectedText(); n != 2 || m.anchor != 1 || m.end != 0 {
+		t.Errorf("drag up: %d lines, %d..%d", n, m.anchor, m.end)
+	}
+	m.Press(4, true) // the view starts at "a" now: row 4 is "c"
+	if m.anchor != 1 || m.end != 2 {
+		t.Errorf("shift+click extends: %d..%d", m.anchor, m.end)
+	}
+	m.SetFilter("long")
+	if m.Selecting() {
+		t.Error("a new filter drops the selection")
+	}
+	if s, n, _ := m.ShownText(); n != 1 || !strings.HasPrefix(s, "long") {
+		t.Errorf("copy all copies the matches: %q", s)
+	}
+}
+
+func TestCopyLimit(t *testing.T) {
+	m := newModel(30, 5)
+	big := strings.Repeat("x", 1000)
+	m.Append(lines(maxCopy/1000+50, big+" %d"))
+	s, n, cut := m.ShownText()
+	if !cut || len(s) > maxCopy || !strings.HasSuffix(s, fmt.Sprintf(" %d", len(m.lines)-1)) {
+		t.Errorf("cut %v, %d bytes, %d lines: the last lines up to the limit", cut, len(s), n)
+	}
+	if strings.Contains(s, "\x1b") || !strings.Contains(s, ":") {
+		t.Error("plain text with the time")
+	}
+}
