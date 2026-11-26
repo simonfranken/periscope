@@ -327,23 +327,25 @@ a real cluster that is one follow request per resting selection on a pod
 or workload. Init containers aren't listed yet (README step 7), so their
 logs can't be shown.
 
-## P20: Copying logs: drag over lines, copied on release
+## P20: Copying logs: drag over lines, c copies
 
 **Context.** Copying log lines into a ticket or a chat is the next step of
 debugging. The mouse belongs to periscope (clicks, the wheel), so the
 terminal's selection needs `shift`, and it copies screen rows: wrapped
 lines in pieces, the time column, padding.
-**Decision.** In the log view a drag selects whole lines and copies them
-on release, like Claude Code copies a selection; a click copies one line,
-`shift+click` extends. `c` copies the selection, else every line shown, so
-a filter and `c` copy the matches. The text is the lines as written,
+**Decision.** In the log view a drag selects whole lines, a click one
+line, `shift+click` extends; the header says how many and that `c`
+copies them. Only `c` writes the clipboard: the selection, else every
+line shown, so a filter and `c` copy the matches. The text is the lines as written,
 unwrapped, with their time, at most 1 MiB (the last lines that fit).
 **Alternatives.** Selecting characters: logs are copied as lines (a stack
 trace, an error and what led to it), and character selection in a view
 that wraps, scrolls and grows is fragile; the terminal's `shift`+drag
-remains for that. Selecting with the keyboard and a copy key: more keys
-for the common case; it can follow if it is missed. Copying on a key
-only: one more step after every selection.
+remains for that. Selecting with the keyboard: more keys for the common case; it can
+follow if it is missed. Copying on release, as Claude Code does: tried
+first and dropped, since nothing tells the user that a selection copies,
+and it overwrites the clipboard unasked, e.g. while marking lines to
+read them.
 **Consequences.** Dragging past the edge scrolls one row per mouse
 movement, not while the mouse rests. OSC 52 is the only way to the
 clipboard so far: a terminal that refuses it copies nothing, and big

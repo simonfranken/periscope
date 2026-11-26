@@ -381,9 +381,10 @@ func (m Model) logFilterView() string {
 	return m.line(m.logFilter.View(), hint)
 }
 
-// logMouse: the wheel scrolls; dragging over lines selects them and copies
-// them on release (a click: one line, shift+click extends); a tab shows
-// its container, the context's name goes back to the tree.
+// logMouse: the wheel scrolls; dragging over lines selects them (a click:
+// one line, shift+click extends), which c then copies: the clipboard is
+// only written on a key (P20). A tab shows its container, the context's
+// name goes back to the tree.
 func (m Model) logMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	switch msg.Button {
 	case tea.MouseButtonWheelUp:
@@ -401,7 +402,7 @@ func (m Model) logMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	case m.dragging && msg.Action == tea.MouseActionRelease:
 		m.dragging = false
 		m.logs.Drag(y)
-		return m.copyLog()
+		return m, nil
 	}
 	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
 		return m, nil

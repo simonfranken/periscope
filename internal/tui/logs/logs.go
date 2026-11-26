@@ -390,6 +390,13 @@ func (m Model) state(bar lipgloss.Style) string {
 	t := m.theme
 	seg := func(c lipgloss.TerminalColor, s string) string { return bar.Foreground(c).Render(s) }
 	var parts []string
+	if _, n, _ := m.SelectedText(); m.selecting {
+		sel := fmt.Sprintf("%d lines selected", n)
+		if n == 1 {
+			sel = "1 line selected"
+		}
+		parts = append(parts, seg(t.Text, sel)+seg(t.Muted, " · c copies"))
+	}
 	if m.filter != "" && len(m.lines) > 0 {
 		parts = append(parts, seg(t.Muted, fmt.Sprintf("%d of %d lines", m.matching, len(m.lines))))
 	}

@@ -395,9 +395,10 @@ preview in the detail pane already shows, so it opens at once.
   matches in `Primary` bold; like the tree's filter, `enter` hands the keys
   back and `esc` closes it.
 - **Copy.** Dragging over lines selects them, whole lines (on the
-  `Selected` background), and copies them on release; the footer says
-  `copied 12 lines`. A click selects one line, `shift+click` extends the
-  selection. Dragging above or below the view scrolls. Selecting pauses
+  `Selected` background); the header says `3 lines selected · c copies`.
+  Selecting never writes the clipboard: only `c` does, and the footer
+  confirms (`copied 3 lines`). A click selects one line, `shift+click`
+  extends the selection. Dragging above or below the view scrolls. Selecting pauses
   following, so the lines stay put. `c` copies the selection, else every
   line shown: with a filter only the matches (`/ timeout`, then `c`); the
   bar says which (`c copy selection`, `c copy matches`, `c copy all`).
@@ -426,7 +427,7 @@ preview in the detail pane already shows, so it opens at once.
 | `p` | Current / previous run (only if the container has run before) |
 | `w` | Cut / wrap long lines |
 | `/` | Filter lines |
-| drag, click, `shift+click` | Select lines and copy them |
+| drag, click, `shift+click` | Select lines |
 | `c` | Copy the selection, else every line shown |
 | `?` | Full help |
 | `q`, `esc`, `⌫`, `←` / `h` | Back to the tree |

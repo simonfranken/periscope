@@ -218,6 +218,15 @@ func TestDragCopiesLines(t *testing.T) {
 	if m.dragging || !m.logs.Selecting() {
 		t.Fatal("the release ends the drag, the lines stay selected")
 	}
+	if term.Len() != 0 {
+		t.Fatal("selecting must not write the clipboard")
+	}
+	if !strings.Contains(ansi.Strip(m.View()), "3 lines selected · c copies") {
+		t.Error("the header says what is selected and how to copy it")
+	}
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+	m = next.(Model)
+	runAll(cmd)
 	b64 := strings.TrimSuffix(strings.TrimPrefix(term.String(), "\x1b]52;c;"), "\x07")
 	got, _ := base64.StdEncoding.DecodeString(b64)
 	if n := strings.Count(string(got), "\n") + 1; n != 3 || !strings.HasPrefix(string(got), "line ") {
