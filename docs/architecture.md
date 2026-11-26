@@ -151,6 +151,10 @@ running containers.
   passes it the process's stderr) is kept, and a failing `Tree` puts it
   first in its error ("Please visit … and enter code …"). The request's
   URL is dropped from errors, so the footer line has room for the reason.
+  Anything the UI itself must send to the terminal outside of rendering
+  (the clipboard's OSC 52) goes to the stderr `main` kept from before
+  `Quiet` (`tui.WithClipboard`), else it would end in the pipe. Inside
+  tmux it is sent unwrapped, for tmux's `set-clipboard on`.
 - `Tree` lists namespaces, then in parallel Deployments, StatefulSets,
   DaemonSets, ReplicaSets, Jobs, CronJobs and pods, cluster-wide, 500 per
   page, and the server version (waited for at most 1 s after them). It links pods to

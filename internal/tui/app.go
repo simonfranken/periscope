@@ -4,6 +4,7 @@ package tui
 
 import (
 	"context"
+	"io"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -60,6 +61,7 @@ type Model struct {
 	checkUpdate func(context.Context) string // looks for a newer release, nil if off
 	update      string                       // the newer release found, "" if none
 	updateTo    string                       // the release to quit and update to, "" if not chosen
+	clipboard   io.Writer                    // the terminal, for OSC 52; os.Stderr if nil
 
 	width, height int
 	showDetail    bool
@@ -556,7 +558,7 @@ func (m Model) copyName() (tea.Model, tea.Cmd) {
 	} else if o.Kind == resource.KindNamespace {
 		name = o.Name
 	}
-	cmd := tea.Batch(copyToClipboard(name), m.footer.Flash("copied "+name))
+	cmd := tea.Batch(m.copyToClipboard(name), m.footer.Flash("copied "+name))
 	m.layout()
 	return m, cmd
 }

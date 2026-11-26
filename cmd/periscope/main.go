@@ -49,6 +49,7 @@ func main() {
 	}
 
 	var provider resource.Provider
+	terminal := os.Stderr // Quiet replaces os.Stderr; the clipboard needs the terminal
 	restoreStderr := func() {}
 	if *useMock {
 		provider = mock.New()
@@ -75,7 +76,7 @@ func main() {
 	zone.NewGlobal()
 	defer zone.Close()
 
-	opts := []tui.Option{tui.WithNamespace(namespace)}
+	opts := []tui.Option{tui.WithNamespace(namespace), tui.WithClipboard(terminal)}
 	if !*useMock && update.Release(version) && os.Getenv("PERISCOPE_NO_UPDATE_CHECK") == "" {
 		opts = append(opts, tui.WithUpdateCheck(latestRelease))
 	}

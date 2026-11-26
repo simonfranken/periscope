@@ -1,10 +1,13 @@
 package tui
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
@@ -155,5 +158,38 @@ func TestLogViewContainers(t *testing.T) {
 	m = press(m, "esc")
 	if m.logView {
 		t.Error("then esc goes back")
+	}
+}
+
+// The clipboard sequence goes to the terminal given, not to os.Stderr,
+// which the Kubernetes provider captures.
+func TestCopyWritesToTheTerminal(t *testing.T) {
+	m := loaded(t, "shop")
+	var term bytes.Buffer
+	m.clipboard = &term
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+	m = next.(Model)
+	runAll(cmd)
+	want := "\x1b]52;c;" + base64.StdEncoding.EncodeToString([]byte("deployment/api")) + "\x07"
+	if term.String() != want {
+		t.Errorf("wrote %q, want %q", term.String(), want)
+	}
+}
+
+// runAll runs cmd and the commands of a batch, except ticks.
+func runAll(cmd tea.Cmd) {
+	if cmd == nil {
+		return
+	}
+	done := make(chan tea.Msg, 1)
+	go func() { done <- cmd() }()
+	select {
+	case msg := <-done:
+		if b, ok := msg.(tea.BatchMsg); ok {
+			for _, c := range b {
+				runAll(c)
+			}
+		}
+	case <-time.After(100 * time.Millisecond): // a tick
 	}
 }
